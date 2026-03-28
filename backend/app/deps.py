@@ -85,6 +85,17 @@ def require_staff_profile(
     }
 
 
+def require_admin_profile(
+    staff: dict = Depends(require_staff_profile),
+) -> dict:
+    if staff["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return staff
+
+
 def verify_internal_key(
     x_internal_key: str | None = Header(default=None, alias="X-Internal-Key"),
     settings: Settings = Depends(get_settings),
