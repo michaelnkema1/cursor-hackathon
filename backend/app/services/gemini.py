@@ -33,7 +33,7 @@ def classify_issue(
     image_mime: str | None,
 ) -> dict[str, Any]:
     """
-    Returns keys: category (str), severity (int 1-5), summary (str), routing_hint (str, optional).
+    Returns keys: category (str), severity (int 1-5 per rubric in prompt), summary (str), routing_hint (str, optional).
     """
     client = genai.Client(api_key=settings.gemini_api_key)
     text_block = "\n".join(
@@ -47,7 +47,12 @@ def classify_issue(
     prompt = f"""You classify civic infrastructure / public service issues for a Ghana municipal reporting app.
 Based on the text and optional image, output a single JSON object ONLY (no markdown), with keys:
 - "category": short snake_case label (e.g. pothole, broken_streetlight, illegal_dumping, water_leak, blocked_drain)
-- "severity": integer 1-5 (5 = urgent safety risk)
+- "severity": integer 1-5 using this scale only:
+  1 = minor/cosmetic or very low impact; no meaningful safety risk; can wait for routine maintenance.
+  2 = noticeable inconvenience or small localized defect; minimal direct safety risk.
+  3 = moderate impact on public use, access, or environment; some safety or health concern if left unaddressed.
+  4 = significant hazard, service failure, or widespread nuisance; needs prompt official attention.
+  5 = immediate danger to life, serious injury, or critical infrastructure failure; treat as emergency priority.
 - "summary": one sentence suitable for a public map popup
 - "routing_hint": which type of authority usually handles this (e.g. "district_assembly", "water_company")
 
