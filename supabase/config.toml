@@ -1,0 +1,10 @@
+# Supabase local / CLI config.
+# Link to a hosted project with `supabase link`, then apply the migrations with `supabase db push`.
+
+project_id = "fixghana"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
