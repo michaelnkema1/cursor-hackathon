@@ -19,7 +19,15 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-If you prefer the Supabase SQL editor, apply the migration files in order from [`supabase/migrations`](C:/Users/ednaa/cursor-hackathon/repo-upstream/supabase/migrations).
+If you prefer the Supabase SQL editor, you can run the one-shot bootstrap in [`bootstrap_remote.sql`](C:/Users/ednaa/cursor-hackathon/repo-upstream/supabase/bootstrap_remote.sql) instead of applying the migration files one by one.
+
+```powershell
+Get-Content C:\Users\ednaa\cursor-hackathon\repo-upstream\supabase\bootstrap_remote.sql -Raw | Set-Clipboard
+```
+
+Then open the Supabase project's `SQL Editor`, paste, and run the query once.
+
+If you want the original migration-by-migration flow, the files are still available in [`supabase/migrations`](C:/Users/ednaa/cursor-hackathon/repo-upstream/supabase/migrations).
 
 ## Bootstrap an admin
 

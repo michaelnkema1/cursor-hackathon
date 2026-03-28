@@ -13,6 +13,15 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-2.0-flash"
 
+    khaya_api_base_url: str | None = None
+    khaya_api_key: str | None = None
+    khaya_translate_path: str = "/translate"
+    khaya_transcribe_path: str | None = (
+        "https://translation-api.ghananlp.org/asr/v2/transcribe?language={language}"
+    )
+    khaya_target_language: str = "en"
+    khaya_timeout_seconds: float = 30.0
+
     cors_origins: str = "http://localhost:3000"
 
     # development | production — controls error detail in global exception handler

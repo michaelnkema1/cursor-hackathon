@@ -29,6 +29,7 @@ def process_issue(
     row = issues_service.fetch_issue(supabase, issue_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    context = issues_service.fetch_issue_context(supabase, issue_id)
     issues_service.run_post_create_ai(
         settings,
         supabase,
@@ -36,7 +37,11 @@ def process_issue(
         lat=float(row["lat"]),
         lng=float(row["lng"]),
         description=row.get("description"),
+        description_language=context.get("description_language"),
         voice_transcript=row.get("voice_transcript"),
+        voice_language=context.get("voice_language"),
         photo_path=row.get("photo_path"),
+        audio_path=row.get("audio_path"),
+        video_path=row.get("video_path"),
     )
     return {"ok": True, "issue_id": str(issue_id)}
