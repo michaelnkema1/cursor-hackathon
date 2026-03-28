@@ -174,7 +174,7 @@ def staff_issues(
 def issues_nearby(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
-    radius_m: float = Query(5000, ge=100, le=100_000),
+    radius_m: float = Query(5000, ge=100, le=2_000_000),
     status_filter: str | None = Query(None, pattern="^(open|in_progress|resolved)$"),
     limit: int = Query(100, ge=1, le=500),
     supabase: Client = Depends(get_supabase),

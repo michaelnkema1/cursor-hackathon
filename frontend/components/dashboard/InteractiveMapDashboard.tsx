@@ -15,8 +15,7 @@ export function InteractiveMapDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
+    // loading starts true; avoid sync setState in effect (eslint react-hooks/set-state-in-effect)
     fetchIssuesFromApi()
       .then((list) => {
         if (cancelled) return;

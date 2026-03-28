@@ -18,12 +18,20 @@ export function AuthShell({ children, title, subtitle }: AuthShellProps) {
           >
             Civic Ghana
           </Link>
-          <Link
-            href="/"
-            className="text-xs font-medium text-slate-500 transition hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-          >
-            Back to map
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs font-medium">
+            <Link
+              href="/dashboard"
+              className="text-slate-500 transition hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/"
+              className="text-slate-500 transition hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              Back to map
+            </Link>
+          </div>
         </div>
       </header>
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-10">

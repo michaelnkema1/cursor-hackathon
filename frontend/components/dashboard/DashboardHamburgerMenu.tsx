@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const NAV = [
+  { href: "/", label: "Map home" },
+  { href: "/dashboard", label: "Full map dashboard" },
+  { href: "/report", label: "Report an issue" },
   { href: "/login", label: "Sign in" },
   { href: "/signup", label: "Sign up" },
-  { href: "/report", label: "Report an issue" },
-  { href: "/", label: "Map home" },
 ] as const;
 
 export function DashboardHamburgerMenu() {

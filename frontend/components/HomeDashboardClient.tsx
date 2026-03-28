@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { DashboardHamburgerMenu } from "@/components/dashboard/DashboardHamburgerMenu";
 import { MapWrapper } from "@/components/MapWrapper";
@@ -72,6 +73,14 @@ export function HomeDashboardClient({
           <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-500">
             Tap a report to show it on the map. Sign in and more are in the
             top-right menu.
+          </p>
+          <p className="mt-3">
+            <Link
+              href="/dashboard"
+              className="text-xs font-semibold text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+            >
+              Open full-screen map dashboard →
+            </Link>
           </p>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">

@@ -57,8 +57,7 @@ export function MapComponent({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    // loading starts true; avoid sync setState in effect (eslint react-hooks/set-state-in-effect)
     fetch("/api/issues", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

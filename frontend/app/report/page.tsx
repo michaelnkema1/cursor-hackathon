@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SiteHeader } from "@/components/SiteHeader";
 import { ReportFormLoader } from "./ReportFormLoader";
 
 export const metadata: Metadata = {
@@ -8,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function ReportPage() {
   return (
-    <div className="min-h-dvh flex-1 bg-slate-50 dark:bg-slate-950">
-      {/* Client-only mount avoids RSC/HTML vs client bundle drift (hydration mismatches) */}
+    <div className="flex min-h-dvh flex-1 flex-col bg-slate-50 dark:bg-slate-950">
+      <SiteHeader />
       <ReportFormLoader />
     </div>
   );

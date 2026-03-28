@@ -131,7 +131,8 @@ export async function GET() {
   const url = new URL("/issues/nearby", base);
   url.searchParams.set("lat", "5.6037");
   url.searchParams.set("lng", "-0.187");
-  url.searchParams.set("radius_m", "500000");
+  // National-scale query (Ghana ~500km); backend allows up to 2_000_000 m
+  url.searchParams.set("radius_m", "800000");
 
   try {
     const res = await fetch(url.toString(), {

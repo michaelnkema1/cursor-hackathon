@@ -4,13 +4,19 @@ Integration tests against the real Supabase instance.
 These tests use the actual service-role key and hit the live database.
 They clean up after themselves — any rows inserted are deleted at the end.
 
-Run with:
-    cd /path/to/hackathon
-    PYTHONPATH=backend pytest backend/tests/test_supabase_integration.py -v
+Run from repo root (so root `.env` loads) with opt-in:
+
+    RUN_SUPABASE_INTEGRATION=1 PYTHONPATH=backend pytest backend/tests/test_supabase_integration.py -v
 """
+import os
 import uuid
 
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_SUPABASE_INTEGRATION", "").lower() not in ("1", "true", "yes"),
+    reason="Opt-in live tests: RUN_SUPABASE_INTEGRATION=1 and repo root .env with Supabase + Gemini keys",
+)
 from supabase import Client
 
 from app.config import get_settings
