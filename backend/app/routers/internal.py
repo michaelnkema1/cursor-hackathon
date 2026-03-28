@@ -42,5 +42,6 @@ def process_issue(
         voice_language=context.get("voice_language"),
         photo_path=row.get("photo_path"),
         audio_path=row.get("audio_path"),
+        video_path=row.get("video_path"),
     )
     return {"ok": True, "issue_id": str(issue_id)}

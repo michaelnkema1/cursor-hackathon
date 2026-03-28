@@ -55,6 +55,8 @@ def _row_to_public(r: dict) -> IssuePublic:
         title=r.get("title"),
         description=r.get("description"),
         photo_path=r.get("photo_path"),
+        audio_path=r.get("audio_path"),
+        video_path=r.get("video_path"),
         ai_category=r.get("ai_category"),
         ai_severity=r.get("ai_severity"),
         ai_summary=r.get("ai_summary"),
@@ -106,7 +108,6 @@ def _row_to_detail(
     base.update(
         {
             "voice_transcript": row.get("voice_transcript"),
-            "audio_path": row.get("audio_path"),
             "structured_report": row.get("structured_report"),
             "media": [_row_to_media(item) for item in media or []],
             "timeline": [_row_to_timeline(item) for item in timeline or []],
@@ -163,6 +164,7 @@ def submit_report(
         voice_transcript=body.voice_transcript,
         photo_path=body.photo_path,
         audio_path=body.audio_path,
+        video_path=body.video_path,
     )
     issues_service.append_event(
         supabase,
@@ -175,6 +177,7 @@ def submit_report(
             "title": body.title,
             "description_language": body.description_language,
             "voice_language": body.voice_language,
+            "video_path": body.video_path,
         },
     )
 
@@ -192,6 +195,7 @@ def submit_report(
                 voice_language=body.voice_language,
                 photo_path=body.photo_path,
                 audio_path=body.audio_path,
+                video_path=body.video_path,
             )
         except Exception:
             logger.exception("Inline AI failed for issue %s", issue_id)

@@ -21,6 +21,7 @@ from app.db_contract import (
     ROUTING_RULES_TABLE,
 )
 from app.services import gemini, khaya
+from app.services.media import extract_audio_from_video
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,13 @@ def _download_storage_object(
         "png": "image/png",
         "webp": "image/webp",
         "gif": "image/gif",
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "m4a": "audio/mp4",
+        "mp4": "video/mp4",
+        "mov": "video/quicktime",
+        "webm": "video/webm",
+        "mkv": "video/x-matroska",
     }.get(ext, "application/octet-stream")
     return (data if isinstance(data, bytes) else bytes(data), mime)
 
@@ -59,6 +67,7 @@ def create_issue_row(
     voice_transcript: str | None,
     photo_path: str | None,
     audio_path: str | None,
+    video_path: str | None,
 ) -> UUID:
     row = {
         "reporter_id": reporter_id,
@@ -70,6 +79,7 @@ def create_issue_row(
         "voice_transcript": voice_transcript,
         "photo_path": photo_path,
         "audio_path": audio_path,
+        "video_path": video_path,
     }
     res = supabase.table(ISSUES_TABLE).insert(row).execute()
     if not res.data:
@@ -350,6 +360,7 @@ def run_post_create_ai(
     voice_language: str | None,
     photo_path: str | None,
     audio_path: str | None,
+    video_path: str | None,
 ) -> None:
     image_tuple: tuple[bytes, str] | None = None
     if photo_path:
@@ -361,6 +372,7 @@ def run_post_create_ai(
 
     effective_voice_transcript = voice_transcript
     transcribed_from_audio = False
+    transcription_source = None
     if not effective_voice_transcript and audio_path:
         audio_tuple = _download_storage_object(
             supabase,
@@ -377,11 +389,40 @@ def run_post_create_ai(
             if transcript:
                 effective_voice_transcript = transcript
                 transcribed_from_audio = True
+                transcription_source = "audio"
                 patch_issue(
                     supabase,
                     issue_id,
                     changes={"voice_transcript": transcript},
                 )
+
+    if not effective_voice_transcript and video_path:
+        video_tuple = _download_storage_object(
+            supabase,
+            settings.supabase_storage_bucket,
+            video_path,
+        )
+        if video_tuple:
+            extracted_audio = extract_audio_from_video(
+                video_tuple[0],
+                source_filename=video_path.rsplit("/", 1)[-1] or "video.bin",
+            )
+            if extracted_audio:
+                transcript = khaya.transcribe_audio(
+                    settings,
+                    audio_bytes=extracted_audio[0],
+                    filename=extracted_audio[1],
+                    language=voice_language,
+                )
+                if transcript:
+                    effective_voice_transcript = transcript
+                    transcribed_from_audio = True
+                    transcription_source = "video"
+                    patch_issue(
+                        supabase,
+                        issue_id,
+                        changes={"voice_transcript": transcript},
+                    )
 
     normalized_description = description
     translated_description = False
@@ -419,6 +460,7 @@ def run_post_create_ai(
                 "description_language": description_language,
                 "voice_language": voice_language,
                 "transcribed_from_audio": transcribed_from_audio,
+                "transcription_source": transcription_source,
                 "translated_description": translated_description,
                 "translated_voice_transcript": translated_voice,
             },

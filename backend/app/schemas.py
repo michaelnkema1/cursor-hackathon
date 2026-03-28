@@ -34,6 +34,7 @@ class CreateReportRequest(BaseModel):
     voice_language: str | None = Field(default=None, max_length=32)
     photo_path: str | None = None
     audio_path: str | None = None
+    video_path: str | None = None
 
 
 class CreateReportResponse(BaseModel):
@@ -50,6 +51,8 @@ class IssuePublic(BaseModel):
     title: str | None = None
     description: str | None = None
     photo_path: str | None = None
+    audio_path: str | None = None
+    video_path: str | None = None
     ai_category: str | None = None
     ai_severity: int | None = None
     ai_summary: str | None = None
@@ -103,7 +106,6 @@ class IssueDuplicateSuggestion(BaseModel):
 
 class IssueDetail(IssuePublic):
     voice_transcript: str | None = None
-    audio_path: str | None = None
     structured_report: dict[str, Any] | None = None
     media: list[IssueMedia] = Field(default_factory=list)
     timeline: list[IssueTimelineEntry] = Field(default_factory=list)

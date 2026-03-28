@@ -22,7 +22,7 @@ ISSUE_TIMELINE_VIEW = "issue_timeline"
 
 ISSUE_COLUMNS = (
     "id, reporter_id, status, lat, lng, description, voice_transcript, "
-    "photo_path, audio_path, ai_category, ai_severity, ai_summary, "
+    "photo_path, audio_path, video_path, ai_category, ai_severity, ai_summary, "
     "routed_organization_id, structured_report, title, category, subcategory, "
     "severity, ai_model, ai_confidence, duplicate_of_id, duplicate_score, "
     "is_likely_duplicate, resolved_at, created_at, updated_at"
