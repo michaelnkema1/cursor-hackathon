@@ -211,16 +211,10 @@ def patch_issue_status(
     *,
     status: str,
 ) -> dict[str, Any] | None:
-    res = (
-        supabase.table(ISSUES_TABLE)
-        .update({"status": status})
-        .eq("id", str(issue_id))
-        .select(ISSUE_COLUMNS)
-        .execute()
-    )
-    if not res.data:
-        return None
-    return res.data[0]
+    # Update the status (some supabase-py versions don't support chaining
+    # .select() after .update().eq(), so we update then re-fetch separately)
+    supabase.table(ISSUES_TABLE).update({"status": status}).eq("id", str(issue_id)).execute()
+    return fetch_issue(supabase, issue_id)
 
 
 def run_post_create_ai(
