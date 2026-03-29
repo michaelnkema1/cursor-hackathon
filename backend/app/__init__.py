@@ -1,1 +1,1 @@
-# FixGhana API
+# Problem Investigator API

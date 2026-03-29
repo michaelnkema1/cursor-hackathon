@@ -57,8 +57,6 @@ export function MapComponent({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     fetch("/api/issues", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -76,7 +74,7 @@ export function MapComponent({
       .catch(() => {
         if (!cancelled) {
           setIssues([]);
-          setError("Could not load issues");
+          setError("Could not load cases");
         }
       })
       .finally(() => {
@@ -118,7 +116,7 @@ export function MapComponent({
     <div className="relative h-full min-h-[280px] w-full">
       {loading && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-1000 rounded-lg bg-white/90 px-2 py-1 text-xs font-medium text-slate-600 shadow-md dark:bg-slate-900/90 dark:text-slate-300">
-          Loading pins…
+          Loading cases...
         </div>
       )}
       {error && (
@@ -155,7 +153,7 @@ export function MapComponent({
               <div className="min-w-[200px] font-sans text-sm text-slate-800">
                 <p className="font-semibold text-slate-900">{issue.title}</p>
                 <p className="mt-1 text-xs text-slate-600">
-                  <span className="font-medium text-slate-700">Type:</span>{" "}
+                  <span className="font-medium text-slate-700">Category:</span>{" "}
                   {issue.type}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-600">

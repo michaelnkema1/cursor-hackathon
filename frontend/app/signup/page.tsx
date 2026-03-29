@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { redirectIfAuthenticated } from "@/lib/auth/session";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { SignupForm } from "@/components/auth/SignupForm";
 
 export const metadata: Metadata = {
-  title: "Create account | Civic Ghana",
-  description: "Join Civic Ghana to report and track infrastructure issues.",
+  title: "Create account",
+  description: "Create a Problem Investigator account for secure intake and follow-up.",
 };
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  await redirectIfAuthenticated();
+
   return (
     <AuthShell
-      title="Create your account"
-      subtitle="Report issues, add photos, and help authorities prioritize fixes in your area."
+      title="Create your investigator account"
+      subtitle="Use one account for secure uploads, case tracking, and multilingual problem intake."
     >
-      <SignupForm />
+      <Suspense fallback={null}>
+        <SignupForm />
+      </Suspense>
     </AuthShell>
   );
 }

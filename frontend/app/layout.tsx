@@ -13,9 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Civic Ghana — Community infrastructure reporting",
+  title: {
+    default: "Problem Investigator",
+    template: "%s | Problem Investigator",
+  },
   description:
-    "Report roads, water, power, and sanitation issues to authorities across Ghana.",
+    "Capture, triage, and investigate general problems with media, location, and AI-assisted analysis.",
 };
 
 export default function RootLayout({
@@ -28,7 +31,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full font-sans text-slate-950">{children}</body>
     </html>
   );
 }

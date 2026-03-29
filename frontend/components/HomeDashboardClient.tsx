@@ -42,25 +42,25 @@ export function HomeDashboardClient({
     <div className="flex min-h-dvh flex-1 flex-col bg-slate-50 dark:bg-slate-950">
       <header className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 dark:border-slate-800 dark:bg-slate-950">
         <span className="text-sm font-bold tracking-tight text-sky-600 dark:text-sky-400">
-          Civic Ghana
+          Problem Investigator
         </span>
         <DashboardHamburgerMenu />
       </header>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <aside
         className="relative z-30 flex max-h-[min(55vh,24rem)] w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-white lg:max-h-none lg:w-[min(100%,22rem)] lg:overflow-visible lg:border-b-0 lg:border-r dark:border-slate-800 dark:bg-slate-950"
-        aria-label="Live reports"
+        aria-label="Live investigation cases"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
           <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
-            Live Reports
+            Live Cases
           </h2>
           <div className="mt-3 w-full">
             <a
               href="/report"
               className="block w-full min-h-12 rounded-xl bg-blue-600 px-4 py-3 text-center text-base font-bold text-white shadow-md ring-1 ring-blue-500/30 transition-all hover:bg-blue-700 hover:shadow-lg active:scale-[0.98] active:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500 dark:active:bg-blue-700"
             >
-              + Report New Issue
+              + Log New Case
             </a>
           </div>
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
@@ -70,7 +70,7 @@ export function HomeDashboardClient({
             </code>
           </p>
           <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-500">
-            Tap a report to show it on the map. Sign in and more are in the
+            Tap a case to show it on the map. Sign in and more are in the
             top-right menu.
           </p>
         </div>
@@ -84,7 +84,7 @@ export function HomeDashboardClient({
             </p>
           ) : issues.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              No reports returned.
+              No cases returned.
             </p>
           ) : (
             issues.map((issue) => {

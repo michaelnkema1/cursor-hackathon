@@ -35,9 +35,9 @@ _ADMIN_ONLY_PATCH_FIELDS = (
 
 def _report_message(settings: Settings) -> str:
     if settings.ai_inline:
-        return "Report saved; classification completed in this request."
+        return "Case logged; classification completed in this request."
     parts = [
-        "Report saved. Run AI via POST /internal/process-issue/{id} with header X-Internal-Key, "
+        "Case logged. Run AI via POST /internal/process-issue/{id} with header X-Internal-Key, "
         "or trigger the same URL from a Supabase Database Webhook."
     ]
     if settings.ai_trigger_self_http and settings.app_base_url and settings.internal_process_secret:

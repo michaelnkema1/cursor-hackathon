@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
-    app = FastAPI(title="FixGhana API", version="0.1.0")
+    app = FastAPI(title="Problem Investigator API", version="0.1.0")
 
     origins = settings.cors_origin_list
     app.add_middleware(

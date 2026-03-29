@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
+import { requireUser } from "@/lib/auth/session";
 import { ReportFormLoader } from "./ReportFormLoader";
 
 export const metadata: Metadata = {
-  title: "Report an issue | Civic Ghana",
-  description: "Submit a new infrastructure report for your community.",
+  title: "Log a problem",
+  description: "Capture a new case with location, media, and investigative context.",
 };
 
-export default function ReportPage() {
+export default async function ReportPage() {
+  await requireUser("/report");
+
   return (
-    <div className="min-h-dvh flex-1 bg-slate-50 dark:bg-slate-950">
-      {/* Client-only mount avoids RSC/HTML vs client bundle drift (hydration mismatches) */}
+    <div className="min-h-dvh flex-1 bg-transparent">
       <ReportFormLoader />
     </div>
   );

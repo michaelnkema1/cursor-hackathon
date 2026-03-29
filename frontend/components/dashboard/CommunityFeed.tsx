@@ -42,10 +42,10 @@ export function CommunityFeed({
     <div className="flex h-full min-h-0 flex-col border-t border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-black/40 lg:border-t-0 lg:border-l lg:shadow-none">
       <div className="shrink-0 border-b border-slate-200/80 px-4 py-3 dark:border-slate-800">
         <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
-          Community feed
+          Case feed
         </h2>
         <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-          Recent infrastructure reports across Ghana
+          Recent problem cases from the live investigation queue
         </p>
       </div>
       <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4">

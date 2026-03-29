@@ -1,7 +1,9 @@
 import logging
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+from postgrest.exceptions import APIError
 from supabase import Client
 
 from app.config import Settings
@@ -24,6 +26,42 @@ from app.services import gemini, khaya
 from app.services.media import extract_audio_from_video
 
 logger = logging.getLogger(__name__)
+
+_LEGACY_ISSUE_COLUMNS = ISSUE_COLUMNS.replace("video_path, ", "")
+
+
+def _is_missing_video_path_error(exc: Exception) -> bool:
+    if not isinstance(exc, APIError):
+        return False
+
+    payload = exc.args[0] if exc.args else None
+    code = None
+    if isinstance(payload, dict):
+        code = payload.get("code")
+
+    message = str(exc)
+    mentions_video_column = "video_path" in message and "issues" in message
+    return mentions_video_column and code in {"PGRST204", "42703", None}
+
+
+def _with_video_path_fallback(
+    full_query: Any,
+    legacy_query: Any,
+) -> list[dict[str, Any]]:
+    try:
+        res = full_query().execute()
+    except Exception as exc:
+        if not _is_missing_video_path_error(exc):
+            raise
+        logger.warning(
+            "Supabase schema cache is missing issues.video_path; retrying without video support"
+        )
+        res = legacy_query().execute()
+
+    rows = list(res.data or [])
+    for row in rows:
+        row.setdefault("video_path", None)
+    return rows
 
 
 def _download_storage_object(
@@ -62,12 +100,12 @@ def create_issue_row(
     reporter_id: str,
     lat: float,
     lng: float,
-    title: str | None,
-    description: str | None,
-    voice_transcript: str | None,
-    photo_path: str | None,
-    audio_path: str | None,
-    video_path: str | None,
+    title: str | None = None,
+    description: str | None = None,
+    voice_transcript: str | None = None,
+    photo_path: str | None = None,
+    audio_path: str | None = None,
+    video_path: str | None = None,
 ) -> UUID:
     row = {
         "reporter_id": reporter_id,
@@ -81,7 +119,17 @@ def create_issue_row(
         "audio_path": audio_path,
         "video_path": video_path,
     }
-    res = supabase.table(ISSUES_TABLE).insert(row).execute()
+    try:
+        res = supabase.table(ISSUES_TABLE).insert(row).execute()
+    except Exception as exc:
+        if not _is_missing_video_path_error(exc):
+            raise
+        legacy_row = dict(row)
+        legacy_row.pop("video_path", None)
+        logger.warning(
+            "Supabase schema cache is missing issues.video_path; creating issue without video_path"
+        )
+        res = supabase.table(ISSUES_TABLE).insert(legacy_row).execute()
     if not res.data:
         raise RuntimeError("Insert issue returned no data")
     return UUID(str(res.data[0]["id"]))
@@ -122,16 +170,23 @@ def fetch_issue_context(supabase: Client, issue_id: UUID) -> dict[str, Any]:
 
 
 def fetch_issue(supabase: Client, issue_id: UUID) -> dict[str, Any] | None:
-    res = (
-        supabase.table(ISSUES_TABLE)
-        .select(ISSUE_COLUMNS)
-        .eq("id", str(issue_id))
-        .limit(1)
-        .execute()
+    rows = _with_video_path_fallback(
+        lambda: (
+            supabase.table(ISSUES_TABLE)
+            .select(ISSUE_COLUMNS)
+            .eq("id", str(issue_id))
+            .limit(1)
+        ),
+        lambda: (
+            supabase.table(ISSUES_TABLE)
+            .select(_LEGACY_ISSUE_COLUMNS)
+            .eq("id", str(issue_id))
+            .limit(1)
+        ),
     )
-    if not res.data:
+    if not rows:
         return None
-    return res.data[0]
+    return rows[0]
 
 
 def list_my_reports(
@@ -142,15 +197,22 @@ def list_my_reports(
     offset: int,
 ) -> list[dict[str, Any]]:
     end = offset + max(limit, 1) - 1
-    res = (
-        supabase.table(ISSUES_TABLE)
-        .select(ISSUE_COLUMNS)
-        .eq("reporter_id", reporter_id)
-        .order("created_at", desc=True)
-        .range(offset, end)
-        .execute()
+    return _with_video_path_fallback(
+        lambda: (
+            supabase.table(ISSUES_TABLE)
+            .select(ISSUE_COLUMNS)
+            .eq("reporter_id", reporter_id)
+            .order("created_at", desc=True)
+            .range(offset, end)
+        ),
+        lambda: (
+            supabase.table(ISSUES_TABLE)
+            .select(_LEGACY_ISSUE_COLUMNS)
+            .eq("reporter_id", reporter_id)
+            .order("created_at", desc=True)
+            .range(offset, end)
+        ),
     )
-    return list(res.data or [])
 
 
 def list_staff_issues(
@@ -164,18 +226,24 @@ def list_staff_issues(
 ) -> list[dict[str, Any]]:
     if role == "authority" and not organization_id:
         return []
-    q = (
-        supabase.table(ISSUES_TABLE)
-        .select(ISSUE_COLUMNS)
-        .order("created_at", desc=True)
-    )
-    if role == "authority":
-        q = q.eq("routed_organization_id", str(organization_id))
-    if status:
-        q = q.eq("status", status)
     end = offset + max(limit, 1) - 1
-    res = q.range(offset, end).execute()
-    return list(res.data or [])
+
+    def build_query(columns: str):
+        query = (
+            supabase.table(ISSUES_TABLE)
+            .select(columns)
+            .order("created_at", desc=True)
+        )
+        if role == "authority":
+            query = query.eq("routed_organization_id", str(organization_id))
+        if status:
+            query = query.eq("status", status)
+        return query.range(offset, end)
+
+    return _with_video_path_fallback(
+        lambda: build_query(ISSUE_COLUMNS),
+        lambda: build_query(_LEGACY_ISSUE_COLUMNS),
+    )
 
 
 def list_nearby(
@@ -273,15 +341,21 @@ def list_issue_duplicate_suggestions(
         return rows
 
     candidate_ids = [str(row["candidate_issue_id"]) for row in rows]
-    candidate_res = (
-        supabase.table(ISSUES_TABLE)
-        .select(ISSUE_COLUMNS)
-        .in_("id", candidate_ids)
-        .execute()
+    candidate_rows = _with_video_path_fallback(
+        lambda: (
+            supabase.table(ISSUES_TABLE)
+            .select(ISSUE_COLUMNS)
+            .in_("id", candidate_ids)
+        ),
+        lambda: (
+            supabase.table(ISSUES_TABLE)
+            .select(_LEGACY_ISSUE_COLUMNS)
+            .in_("id", candidate_ids)
+        ),
     )
     candidates = {
         str(row["id"]): row
-        for row in list(candidate_res.data or [])
+        for row in candidate_rows
     }
     return [
         {
@@ -345,6 +419,17 @@ def patch_issue(
     # so update first, then fetch the row in a second call.
     supabase.table(ISSUES_TABLE).update(changes).eq("id", str(issue_id)).execute()
     return fetch_issue(supabase, issue_id)
+
+
+def patch_issue_status(
+    supabase: Client,
+    issue_id: UUID,
+    *,
+    status: str,
+) -> dict[str, Any] | None:
+    changes: dict[str, Any] = {"status": status}
+    changes["resolved_at"] = datetime.now(timezone.utc).isoformat() if status == "resolved" else None
+    return patch_issue(supabase, issue_id, changes=changes)
 
 
 def run_post_create_ai(

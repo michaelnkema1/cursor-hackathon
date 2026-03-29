@@ -1,10 +1,10 @@
-# FixGhana
+# Problem Investigator
 
-FixGhana is a civic reporting platform: citizens submit photo, location, and voice or text; the backend classifies the issue with AI, estimates severity, and supports routing and dashboards for authorities. This repository contains the **FastAPI backend** (sole writer to Supabase) and deployment helpers; the database schema and migrations are maintained separately by your team.
+Problem Investigator is a general issue-intake and investigation workspace: users submit photo, location, voice, or text; the backend classifies the problem with AI, estimates severity, and supports routing and dashboards for investigators. This repository contains the **FastAPI backend** (sole writer to Supabase) and deployment helpers; the database schema and migrations are maintained separately by your team.
 
 ## Issue severity scale
 
-Each report gets an integer **`ai_severity`** from **1** (lowest) to **5** (highest). Gemini assigns this from the description, transcript, and optional image. The scale is designed for triage and map filtering, not a legal finding.
+Each case gets an integer **`ai_severity`** from **1** (lowest) to **5** (highest). Gemini assigns this from the description, transcript, and optional image. The scale is designed for triage and prioritization, not a legal finding.
 
 | Level | Meaning |
 | ----- | ------- |
@@ -20,7 +20,7 @@ Values are clamped to 1–5 in application code after model output. The same sca
 
 - **FastAPI** — REST API, JWT verification (Supabase user tokens), global error handling  
 - **Supabase** — Postgres (via service role), Storage signed upload/read URLs  
-- **Google Gemini** — issue classification, structured civic report JSON  
+- **Google Gemini** — issue classification, structured investigation brief JSON  
 - **Deploy** — optional [Vercel](vercel.json) (`api/index.py`), optional [Docker](backend/Dockerfile)
 
 ## Repository layout
@@ -81,8 +81,8 @@ From `backend/` (build context must include `app/` and `requirements.txt`):
 
 ```bash
 cd backend
-docker build -t fixghana-api .
-docker run --env-file ../.env -p 8000:8000 fixghana-api
+docker build -t problem-investigator-api .
+docker run --env-file ../.env -p 8000:8000 problem-investigator-api
 ```
 
 Adjust `--env-file` to your `.env` path.

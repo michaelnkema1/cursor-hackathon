@@ -1,11 +1,11 @@
 export type IssueStatus = "Reported" | "Investigating" | "Resolved";
 
 export type IssueCategory =
-  | "Water"
-  | "Roads"
-  | "Electricity"
-  | "Health"
-  | "Sanitation";
+  | "Systems"
+  | "Operations"
+  | "Safety"
+  | "Facilities"
+  | "People";
 
 export type CommunityReport = {
   id: string;
@@ -36,13 +36,12 @@ export type IssueApiRow = {
 
 function guessLocationLabel(title: string): string {
   const t = title.toLowerCase();
-  if (/spintex|osu|oxford|nima|legon|accra|tema|motorway/.test(t))
-    return "Greater Accra";
-  if (/kejetia|kumasi|ashanti|adum/.test(t)) return "Kumasi area";
-  if (/tamale|sagnarigu|northern/.test(t)) return "Northern Region";
-  if (/cape coast|takoradi|western/.test(t)) return "Coastal / Western";
-  if (/sunyani|brong/.test(t)) return "Bono Region";
-  return "Ghana";
+  if (/warehouse|dock|fulfillment/.test(t)) return "Warehouse site";
+  if (/office|meeting|badge|entrance/.test(t)) return "Office site";
+  if (/mobile|app|checkout|login|deploy|database/.test(t)) return "Digital surface";
+  if (/support|customer|queue|ticket/.test(t)) return "Support workflow";
+  if (/hiring|interview|staff|team/.test(t)) return "People operations";
+  return "Pinned location";
 }
 
 export function issueApiRowToReport(row: IssueApiRow): CommunityReport {
@@ -50,7 +49,7 @@ export function issueApiRowToReport(row: IssueApiRow): CommunityReport {
     id: String(row.id),
     title: row.title,
     description:
-      "Citizen-submitted infrastructure report. Status updates appear as authorities respond.",
+      "Submitted problem case. Status updates appear as investigators work through it.",
     category: row.type,
     status: row.status,
     locationLabel: guessLocationLabel(row.title),
@@ -74,15 +73,15 @@ export async function fetchIssuesFromApi(): Promise<CommunityReport[]> {
 
 export function categoryPinColor(category: IssueCategory): string {
   switch (category) {
-    case "Water":
+    case "Systems":
       return "#0ea5e9";
-    case "Roads":
+    case "Operations":
       return "#d97706";
-    case "Electricity":
+    case "Safety":
       return "#7c3aed";
-    case "Health":
+    case "Facilities":
       return "#e11d48";
-    case "Sanitation":
+    case "People":
       return "#059669";
     default:
       return "#64748b";

@@ -3,6 +3,7 @@ from functools import lru_cache
 import jwt
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 from supabase import Client, create_client
 
 from app.config import Settings, get_settings
@@ -23,6 +24,11 @@ def get_settings_dep() -> Settings:
     return get_settings()
 
 
+@lru_cache
+def _jwks_client(supabase_url: str) -> PyJWKClient:
+    return PyJWKClient(f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json")
+
+
 def verify_supabase_jwt(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     settings: Settings = Depends(get_settings),
@@ -32,6 +38,8 @@ def verify_supabase_jwt(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid Authorization header",
         )
+
+    token = credentials.credentials
     decode_opts: dict = {}
     decode_kwargs: dict = {
         "algorithms": ["HS256"],
@@ -40,13 +48,19 @@ def verify_supabase_jwt(
         decode_kwargs["audience"] = "authenticated"
     else:
         decode_opts["verify_aud"] = False
+
     try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.supabase_jwt_secret,
-            options=decode_opts,
-            **decode_kwargs,
-        )
+        header = jwt.get_unverified_header(token)
+        algorithm = header.get("alg", "HS256")
+        if algorithm.startswith("HS"):
+            signing_key = settings.supabase_jwt_secret
+            decode_kwargs["algorithms"] = [algorithm]
+        else:
+            jwks_client = _jwks_client(settings.supabase_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(token).key
+            decode_kwargs["algorithms"] = [algorithm]
+
+        payload = jwt.decode(token, signing_key, options=decode_opts, **decode_kwargs)
     except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

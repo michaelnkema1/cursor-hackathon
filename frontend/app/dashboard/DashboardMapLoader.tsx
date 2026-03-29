@@ -16,13 +16,17 @@ const InteractiveMapDashboard = dynamic(
           aria-hidden
         />
         <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-          Loading map…
+          Loading map...
         </p>
       </div>
     ),
   },
 );
 
-export function DashboardMapLoader() {
-  return <InteractiveMapDashboard />;
+type DashboardMapLoaderProps = {
+  userEmail: string | null;
+};
+
+export function DashboardMapLoader({ userEmail }: DashboardMapLoaderProps) {
+  return <InteractiveMapDashboard userEmail={userEmail} />;
 }

@@ -2,7 +2,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env", "backend/.env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     supabase_url: str
     supabase_service_role_key: str
@@ -15,7 +19,7 @@ class Settings(BaseSettings):
 
     khaya_api_base_url: str | None = None
     khaya_api_key: str | None = None
-    khaya_translate_path: str = "/translate"
+    khaya_translate_path: str = "/v1/translate"
     khaya_transcribe_path: str | None = (
         "https://translation-api.ghananlp.org/asr/v2/transcribe?language={language}"
     )

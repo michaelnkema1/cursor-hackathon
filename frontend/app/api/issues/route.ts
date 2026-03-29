@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 
 /** Matches lib/reports.ts IssueCategory */
 type IssueCategory =
-  | "Water"
-  | "Roads"
-  | "Electricity"
-  | "Health"
-  | "Sanitation";
+  | "Systems"
+  | "Operations"
+  | "Safety"
+  | "Facilities"
+  | "People";
 
 /** Matches lib/reports.ts IssueStatus */
 type IssueStatus = "Reported" | "Investigating" | "Resolved";
@@ -35,8 +35,8 @@ type BackendIssue = {
 const MOCK_ISSUES: IssueRow[] = [
   {
     id: 1,
-    title: "Severe Potholes on Spintex Road",
-    type: "Roads",
+    title: "Recurring checkout failure after the latest release",
+    type: "Systems",
     status: "Reported",
     lat: 5.6255,
     lng: -0.1342,
@@ -44,8 +44,8 @@ const MOCK_ISSUES: IssueRow[] = [
   },
   {
     id: 2,
-    title: "Burst Water Main",
-    type: "Water",
+    title: "Warehouse power outage disrupting fulfillment",
+    type: "Facilities",
     status: "Investigating",
     lat: 5.635,
     lng: -0.16,
@@ -53,8 +53,8 @@ const MOCK_ISSUES: IssueRow[] = [
   },
   {
     id: 3,
-    title: "Faulty Transformer in Adum",
-    type: "Electricity",
+    title: "Customer records mismatched in the support queue",
+    type: "Operations",
     status: "Reported",
     lat: 6.69,
     lng: -1.62,
@@ -62,8 +62,8 @@ const MOCK_ISSUES: IssueRow[] = [
   },
   {
     id: 4,
-    title: "Overflowing Community Dumpster",
-    type: "Sanitation",
+    title: "Repeated badge failures at the side entrance",
+    type: "Safety",
     status: "Resolved",
     lat: 5.536,
     lng: -0.1969,
@@ -71,8 +71,8 @@ const MOCK_ISSUES: IssueRow[] = [
   },
   {
     id: 5,
-    title: "Traffic Lights Down at Intersection",
-    type: "Roads",
+    title: "Interview scheduling backlog across recruiting",
+    type: "People",
     status: "Investigating",
     lat: 5.65,
     lng: -0.18,
@@ -80,8 +80,8 @@ const MOCK_ISSUES: IssueRow[] = [
   },
   {
     id: 6,
-    title: "No Water Supply for 3 Days",
-    type: "Water",
+    title: "Mobile app crash during sign-in on Android",
+    type: "Systems",
     status: "Reported",
     lat: 9.4075,
     lng: -0.8534,
@@ -102,18 +102,22 @@ function mapBackendStatus(s: string): IssueStatus {
 
 function mapCategory(ai: string | null, desc: string | null): IssueCategory {
   const text = `${ai ?? ""} ${desc ?? ""}`.toLowerCase();
-  if (/water|leak|pipe|flood|drain|sewage/.test(text)) return "Water";
-  if (/electric|power|transformer|cable|light/.test(text)) return "Electricity";
-  if (/health|clinic|hospital|waste\s*bio/.test(text)) return "Health";
-  if (/trash|dump|sanitation|waste|garbage/.test(text)) return "Sanitation";
-  return "Roads";
+  if (/systems?|bug|crash|error|deploy|login|database|checkout|payment|app|api/.test(text))
+    return "Systems";
+  if (/safety|security|badge|injury|breach|unsafe|fire|threat/.test(text))
+    return "Safety";
+  if (/facilit|warehouse|office|door|elevator|power|leak|hvac|internet/.test(text))
+    return "Facilities";
+  if (/people|hiring|interview|staff|team|schedule|training|onboarding/.test(text))
+    return "People";
+  return "Operations";
 }
 
 function backendToRow(b: BackendIssue): IssueRow {
   const title =
     (b.ai_summary && b.ai_summary.trim()) ||
     (b.description && b.description.trim()) ||
-    "Infrastructure report";
+    "Problem case";
   return {
     id: b.id,
     title,

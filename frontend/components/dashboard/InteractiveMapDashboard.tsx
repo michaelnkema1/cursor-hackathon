@@ -7,7 +7,13 @@ import { DashboardHamburgerMenu } from "@/components/dashboard/DashboardHamburge
 import { fetchIssuesFromApi } from "@/lib/reports";
 import type { CommunityReport } from "@/lib/reports";
 
-export function InteractiveMapDashboard() {
+type InteractiveMapDashboardProps = {
+  userEmail: string | null;
+};
+
+export function InteractiveMapDashboard({
+  userEmail,
+}: InteractiveMapDashboardProps) {
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -15,8 +21,6 @@ export function InteractiveMapDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
     fetchIssuesFromApi()
       .then((list) => {
         if (cancelled) return;
@@ -41,50 +45,61 @@ export function InteractiveMapDashboard() {
   }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-slate-100 dark:bg-slate-950">
-      <header className="z-20 shrink-0 border-b border-slate-200/80 bg-white/90 px-4 py-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400">
-              Civic Ghana
-            </p>
-            <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl">
-              Interactive map dashboard
-            </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Live data from <code className="rounded bg-slate-200/80 px-1 py-0.5 text-[10px] dark:bg-slate-800">GET /api/issues</code>{" "}
-              — roads, water, power, health, and sanitation.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {loading ? (
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600 dark:bg-slate-900 dark:text-slate-400">
-                  Loading reports…
+    <div className="flex min-h-dvh flex-col bg-transparent">
+      <header className="z-20 shrink-0 px-4 pt-4 sm:px-5 lg:px-6">
+        <div className="rounded-[2rem] border border-white/60 bg-white/80 px-4 py-4 shadow-[0_20px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/85">
+          <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">
+                Problem Investigator
+              </p>
+              <h1 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-white sm:text-2xl">
+                Protected investigation workspace
+              </h1>
+              <p className="text-xs leading-6 text-slate-600 dark:text-slate-400">
+                Signed in as{" "}
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {userEmail ?? "active user"}
                 </span>
-              ) : loadError ? (
-                <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 font-medium text-red-800 dark:bg-red-950/60 dark:text-red-200">
-                  {loadError}
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  {reports.length} report{reports.length === 1 ? "" : "s"} loaded
-                </span>
-              )}
+                . The map blends live backend cases with a calmer, clearer triage view for demo day.
+              </p>
             </div>
-            <DashboardHamburgerMenu />
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <a
+                href="/report"
+                className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-sky-500 dark:text-slate-950 dark:hover:bg-sky-400"
+              >
+                New case
+              </a>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {loading ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+                    Loading cases...
+                  </span>
+                ) : loadError ? (
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 font-medium text-red-800 dark:bg-red-950/60 dark:text-red-200">
+                    {loadError}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                    {reports.length} case{reports.length === 1 ? "" : "s"} loaded
+                  </span>
+                )}
+              </div>
+              <DashboardHamburgerMenu userEmail={userEmail} />
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col lg:flex-row">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-4 py-4 sm:px-5 lg:flex-row lg:px-6">
         <section
           className="relative min-h-[42vh] flex-1 overflow-hidden lg:min-h-0"
-          aria-label="Map of Ghana infrastructure reports"
+          aria-label="Map of open investigation cases"
         >
-          <div className="absolute inset-0 bg-linear-to-br from-sky-50/50 to-transparent dark:from-sky-950/20" />
+          <div className="absolute inset-0 bg-linear-to-br from-sky-50/65 to-transparent dark:from-sky-950/20" />
           <div className="relative h-full w-full lg:p-3 lg:pl-4 lg:pt-4">
-            <div className="h-full overflow-hidden shadow-lg ring-1 ring-slate-200/80 dark:ring-slate-800 lg:rounded-l-2xl lg:rounded-r-none">
+            <div className="h-full overflow-hidden rounded-[2rem] shadow-[0_24px_90px_rgba(15,23,42,0.12)] ring-1 ring-white/60 dark:ring-slate-800 lg:rounded-r-none">
               <MapComponentDynamic
                 selectedId={selectedId}
                 onSelectReport={setSelectedId}
@@ -95,10 +110,10 @@ export function InteractiveMapDashboard() {
 
         <aside
           className="flex max-h-[48vh] w-full shrink-0 flex-col lg:max-h-none lg:w-[min(100%,420px)] xl:w-[440px]"
-          aria-label="Recent community reports"
+          aria-label="Recent investigation cases"
         >
           <div className="min-h-0 flex-1 lg:py-4 lg:pr-4">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-t-2xl ring-1 ring-slate-200/80 dark:ring-slate-800 lg:rounded-2xl lg:shadow-lg">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] ring-1 ring-white/60 shadow-[0_24px_90px_rgba(15,23,42,0.12)] dark:ring-slate-800">
               <CommunityFeed
                 reports={reports}
                 selectedId={selectedId}

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+import { requireUser } from "@/lib/auth/session";
 import { DashboardMapLoader } from "./DashboardMapLoader";
 
 export const metadata: Metadata = {
-  title: "Map dashboard | Civic Ghana",
-  description:
-    "Interactive map of community infrastructure reports across Ghana.",
+  title: "Map dashboard",
+  description: "Interactive map of active investigations and reported problems.",
 };
 
-export default function DashboardPage() {
-  return <DashboardMapLoader />;
+export default async function DashboardPage() {
+  const user = await requireUser();
+
+  return <DashboardMapLoader userEmail={user.email ?? null} />;
 }
