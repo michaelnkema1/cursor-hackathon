@@ -2,55 +2,156 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+/* ─── Category data ─── */
 const CATEGORIES = [
-  "Electricity",
-  "Water",
-  "Roads",
-  "Health",
-  "Sanitation",
+  {
+    value: "Roads",
+    label: "Roads & Bridges",
+    emoji: "🛣️",
+    color: "#f59e0b",
+    bg: "rgba(245,158,11,0.12)",
+    border: "rgba(245,158,11,0.35)",
+    desc: "Potholes, cracks, collapsed bridges",
+  },
+  {
+    value: "Water",
+    label: "Water Supply",
+    emoji: "💧",
+    color: "#0ea5e9",
+    bg: "rgba(14,165,233,0.12)",
+    border: "rgba(14,165,233,0.35)",
+    desc: "Burst pipes, leaks, no supply",
+  },
+  {
+    value: "Electricity",
+    label: "Electricity",
+    emoji: "⚡",
+    color: "#a855f7",
+    bg: "rgba(168,85,247,0.12)",
+    border: "rgba(168,85,247,0.35)",
+    desc: "Power outages, fallen lines",
+  },
+  {
+    value: "Health",
+    label: "Health & Safety",
+    emoji: "🏥",
+    color: "#f43f5e",
+    bg: "rgba(244,63,94,0.12)",
+    border: "rgba(244,63,94,0.35)",
+    desc: "Hazards, blocked access, injuries",
+  },
+  {
+    value: "Sanitation",
+    label: "Sanitation",
+    emoji: "♻️",
+    color: "#10b981",
+    bg: "rgba(16,185,129,0.12)",
+    border: "rgba(16,185,129,0.35)",
+    desc: "Waste, flooding, open drains",
+  },
 ] as const;
 
+type CategoryValue = (typeof CATEGORIES)[number]["value"];
+
+/* ─── Geo helpers ─── */
 function geolocationErrorMessage(err: GeolocationPositionError): string {
   switch (err.code) {
     case err.PERMISSION_DENIED:
-      return "Location was blocked. On iPhone: Settings → Privacy → Location Services → Safari → allow, or tap Allow in the browser prompt.";
+      return "Location was blocked. Enable location access in browser settings.";
     case err.POSITION_UNAVAILABLE:
-      return "Could not determine position. Turn on Location Services and try again (Wi‑Fi helps indoors).";
+      return "Could not determine position. Try outdoors or enable Wi-Fi.";
     case err.TIMEOUT:
-      return "Location timed out. Try again near a window, outdoors, or with Wi‑Fi enabled.";
+      return "Location timed out. Please try again.";
     default:
       return err.message?.trim() || "Could not read your location.";
   }
 }
 
-function getCurrentPositionPromise(
-  options: PositionOptions,
-): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, options);
-  });
+function getCurrentPositionPromise(opts: PositionOptions): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, opts));
 }
 
+/* ─── Step indicator ─── */
+const STEPS = ["Category", "Location", "Details"] as const;
+
+function StepBar({ step }: { step: number }) {
+  return (
+    <div className="flex items-center gap-0">
+      {STEPS.map((label, i) => (
+        <div key={label} className="flex flex-1 items-center">
+          {/* Connector line left */}
+          {i > 0 && (
+            <div
+              className="h-[2px] flex-1 transition-all duration-500"
+              style={{ background: i <= step ? "var(--gold-500)" : "rgba(255,255,255,0.1)" }}
+            />
+          )}
+          {/* Circle */}
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-300"
+              style={{
+                background:
+                  i < step
+                    ? "var(--green-500)"
+                    : i === step
+                    ? "var(--gold-500)"
+                    : "rgba(255,255,255,0.08)",
+                color:
+                  i <= step ? "var(--surface-0)" : "rgba(250,247,240,0.3)",
+                boxShadow: i === step ? "0 0 16px rgba(212,160,23,0.5)" : "none",
+              }}
+            >
+              {i < step ? "✓" : i + 1}
+            </div>
+            <span
+              className="hidden text-[10px] font-semibold sm:block"
+              style={{
+                color:
+                  i === step
+                    ? "var(--gold-400)"
+                    : i < step
+                    ? "var(--green-400)"
+                    : "rgba(250,247,240,0.3)",
+              }}
+            >
+              {label}
+            </span>
+          </div>
+          {/* Connector line right */}
+          {i < STEPS.length - 1 && (
+            <div
+              className="h-[2px] flex-1 transition-all duration-500"
+              style={{ background: i < step ? "var(--gold-500)" : "rgba(255,255,255,0.1)" }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main component ─── */
 export function ReportForm() {
   const formId = useId();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
 
-  const [category, setCategory] = useState<string>("");
+  const [step, setStep] = useState(0);
+  const [category, setCategory] = useState<CategoryValue | "">("");
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [previewLoadError, setPreviewLoadError] = useState(false);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
-  const [locationStatus, setLocationStatus] = useState<
-    "idle" | "loading" | "error"
-  >("idle");
+  const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const revokeImagePreview = useCallback(() => {
+  const revokePreview = useCallback(() => {
     if (previewObjectUrlRef.current) {
       URL.revokeObjectURL(previewObjectUrlRef.current);
       previewObjectUrlRef.current = null;
@@ -59,95 +160,47 @@ export function ReportForm() {
     setPreviewLoadError(false);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (previewObjectUrlRef.current) {
-        URL.revokeObjectURL(previewObjectUrlRef.current);
-      }
-    };
-  }, []);
+  useEffect(() => () => { if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current); }, []);
 
   const resetForm = useCallback(() => {
-    setCategory("");
-    setDescription("");
-    setImageFile(null);
-    revokeImagePreview();
-    setLatitude("");
-    setLongitude("");
-    setLocationStatus("idle");
-    setLocationError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [revokeImagePreview]);
+    setStep(0); setCategory(""); setDescription(""); setImageFile(null);
+    revokePreview(); setLatitude(""); setLongitude("");
+    setLocationStatus("idle"); setLocationError(null);
+    if (galleryRef.current) galleryRef.current.value = "";
+    if (cameraRef.current) cameraRef.current.value = "";
+  }, [revokePreview]);
 
   const handleGetLocation = async () => {
     setLocationStatus("loading");
     setLocationError(null);
-
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationStatus("error");
       setLocationError("Location is not supported in this browser.");
       return;
     }
-
-    if (typeof window !== "undefined" && !window.isSecureContext) {
-      const h = window.location.hostname;
-      if (h !== "localhost" && h !== "127.0.0.1") {
-        setLocationStatus("error");
-        setLocationError(
-          "Location needs HTTPS. Use https:// or test on localhost.",
-        );
-        return;
-      }
-    }
-
     const apply = (pos: GeolocationPosition) => {
       setLatitude(String(pos.coords.latitude));
       setLongitude(String(pos.coords.longitude));
-      setLocationStatus("idle");
+      setLocationStatus("success");
       setLocationError(null);
     };
-
     try {
-      // Mobile (especially iOS) often fails with high accuracy + maximumAge:0 indoors.
-      // Prefer a fast approximate fix first, then retry with GPS if needed.
-      const pos = await getCurrentPositionPromise({
-        enableHighAccuracy: false,
-        timeout: 25_000,
-        maximumAge: 120_000,
-      });
+      const pos = await getCurrentPositionPromise({ enableHighAccuracy: false, timeout: 25_000, maximumAge: 120_000 });
       apply(pos);
     } catch (first) {
-      const e1 = first as GeolocationPositionError;
       try {
-        const pos2 = await getCurrentPositionPromise({
-          enableHighAccuracy: true,
-          timeout: 35_000,
-          maximumAge: 0,
-        });
+        const pos2 = await getCurrentPositionPromise({ enableHighAccuracy: true, timeout: 35_000, maximumAge: 0 });
         apply(pos2);
       } catch (second) {
-        const e2 = second as GeolocationPositionError;
         setLocationStatus("error");
-        setLocationError(geolocationErrorMessage(e2 || e1));
+        setLocationError(geolocationErrorMessage((second || first) as GeolocationPositionError));
       }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    window.setTimeout(() => {
-      resetForm();
-      setSubmitting(false);
-      setSuccess(true);
-    }, 1_500);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
+  const applyFile = (file: File | null) => {
     setImageFile(file);
-    revokeImagePreview();
+    revokePreview();
     if (file && file.type.startsWith("image/")) {
       const url = URL.createObjectURL(file);
       previewObjectUrlRef.current = url;
@@ -156,40 +209,50 @@ export function ReportForm() {
     }
   };
 
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    window.setTimeout(() => { resetForm(); setSubmitting(false); setSuccess(true); }, 1_500);
+  };
+
+  const selectedCat = CATEGORIES.find((c) => c.value === category);
+
+  /* ── Success ── */
   if (success) {
     return (
-      <div className="mx-auto w-full max-w-lg px-4 py-8 sm:px-6">
-        <div className="rounded-2xl border border-emerald-200 bg-linear-to-b from-emerald-50 to-white p-8 text-center shadow-lg ring-1 ring-emerald-100 dark:border-emerald-800/80 dark:from-emerald-950/40 dark:to-slate-950 dark:ring-emerald-900/40">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
-            <svg
-              className="h-9 w-9"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h2 className="mt-5 text-xl font-bold tracking-tight text-emerald-900 dark:text-emerald-100">
-            Report Submitted Successfully!
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed text-emerald-800/90 dark:text-emerald-200/80">
-            Thank you. Your infrastructure report has been received. Local
-            authorities can use this information to prioritize fixes.
-          </p>
-          <button
-            type="button"
-            onClick={() => setSuccess(false)}
-            className="mt-8 w-full rounded-xl bg-emerald-600 px-5 py-4 text-base font-semibold text-white shadow-md transition hover:bg-emerald-700 active:scale-[0.99] dark:bg-emerald-500 dark:hover:bg-emerald-400"
+      <div className="animate-fade-in mx-auto w-full max-w-lg px-4 py-12 sm:px-6">
+        <div
+          className="flex flex-col items-center rounded-3xl p-10 text-center"
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid rgba(52,211,153,0.2)",
+            boxShadow: "0 0 60px rgba(52,211,153,0.1)",
+          }}
+        >
+          <div
+            className="flex h-24 w-24 items-center justify-center rounded-full text-5xl animate-gold-glow"
+            style={{ background: "rgba(52,211,153,0.12)", border: "2px solid rgba(52,211,153,0.3)" }}
           >
-            Submit another report
-          </button>
+            ✅
+          </div>
+          <h2
+            className="mt-6 text-2xl font-black tracking-tight text-[var(--cream)]"
+            style={{ fontFamily: "var(--font-montserrat)" }}
+          >
+            Report Submitted!
+          </h2>
+          <p className="mt-3 max-w-xs text-sm leading-relaxed" style={{ color: "rgba(250,247,240,0.55)" }}>
+            Your infrastructure report has been received. IGP AI will classify and prioritize it for authorities.
+          </p>
+          <div className="mt-8 flex w-full flex-col gap-3">
+            <button onClick={() => setSuccess(false)} className="btn-gold w-full py-3.5 text-base">
+              Submit another report
+            </button>
+            <a href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+              View map
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -197,203 +260,361 @@ export function ReportForm() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 py-8 sm:px-6">
+      {/* Header */}
       <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400">
-          Civic Ghana
-        </p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-          Report an issue
+        <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--gold-400)" }}>IGP</p>
+        <h1 className="mt-1 text-2xl font-black tracking-tight text-[var(--cream)] sm:text-3xl" style={{ fontFamily: "var(--font-montserrat)" }}>
+          Report an Issue
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-          Describe infrastructure problems in your community. Fields marked
-          with * are required.
+        <p className="mt-1 text-sm" style={{ color: "rgba(250,247,240,0.45)" }}>
+          Help authorities fix infrastructure in your community.
         </p>
       </div>
 
-      <form
-        id={formId}
-        onSubmit={handleSubmit}
-        className="flex flex-col gap-6"
+      {/* Step bar */}
+      <div
+        className="mb-8 rounded-2xl px-4 py-5"
+        style={{ background: "var(--surface-2)", border: "1px solid rgba(255,255,255,0.07)" }}
       >
-        <div>
-          <label
-            htmlFor={`${formId}-image`}
-            className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200"
-          >
-            Photo (optional)
-          </label>
-          <input
-            ref={fileInputRef}
-            id={`${formId}-image`}
-            name="image"
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="sr-only"
-            tabIndex={-1}
-          />
-          <label
-            htmlFor={`${formId}-image`}
-            className="flex min-h-[160px] cursor-pointer touch-manipulation flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/80 px-5 py-6 text-center transition hover:border-sky-400 hover:bg-sky-50/50 active:scale-[0.99] dark:border-slate-600 dark:bg-slate-900/50 dark:hover:border-sky-500 dark:hover:bg-sky-950/30"
-          >
-            {imagePreviewUrl && !previewLoadError ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imagePreviewUrl}
-                  alt=""
-                  className="mt-1 max-h-48 w-full max-w-full rounded-lg object-contain shadow-sm"
-                  onError={() => setPreviewLoadError(true)}
-                />
-                {imageFile && (
-                  <span className="mt-2 max-w-full truncate text-xs font-medium text-sky-700 dark:text-sky-300">
-                    {imageFile.name}
-                  </span>
-                )}
-                <span className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Tap to change photo
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="rounded-full bg-sky-100 p-3 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">
-                  <svg
-                    className="h-8 w-8"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    aria-hidden
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3A1.5 1.5 0 001.5 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-                    />
-                  </svg>
-                </span>
-                <span className="mt-3 text-base font-semibold text-slate-800 dark:text-slate-100">
-                  Tap to upload a photo
-                </span>
-                <span className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  JPG, PNG, or HEIC — max one image
-                </span>
-                {previewLoadError && imageFile && (
-                  <span className="mt-3 max-w-full text-xs font-medium text-amber-700 dark:text-amber-300">
-                    Preview not available for this file type. Selected:{" "}
-                    {imageFile.name}
-                  </span>
-                )}
-              </>
-            )}
-          </label>
-        </div>
+        <StepBar step={step} />
+      </div>
 
-        <div>
-          <span className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Location
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              void handleGetLocation();
-            }}
-            disabled={locationStatus === "loading"}
-            className="relative z-10 mb-3 w-full touch-manipulation rounded-xl border-2 border-slate-200 bg-white px-5 py-4 text-base font-semibold text-slate-800 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 active:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-sky-600 dark:hover:bg-sky-950/40 dark:active:bg-slate-800"
-          >
-            {locationStatus === "loading"
-              ? "Getting location..."
-              : "Get My Location"}
-          </button>
-          {locationError && (
-            <p className="mb-3 text-sm text-red-600 dark:text-red-400" role="alert">
-              {locationError}
+      <form id={formId} onSubmit={handleSubmit}>
+
+        {/* ════════ STEP 0: Category ════════ */}
+        {step === 0 && (
+          <div className="animate-fade-in">
+            <p className="mb-5 text-base font-semibold" style={{ color: "var(--cream)" }}>
+              What type of issue are you reporting?
             </p>
-          )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor={`${formId}-lat`}
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400"
-              >
-                Latitude
-              </label>
-              <input
-                id={`${formId}-lat`}
-                readOnly
-                value={latitude}
-                placeholder="—"
-                className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3.5 text-base text-slate-800 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
+
+            <div className="flex flex-col gap-3">
+              {CATEGORIES.map((cat) => {
+                const selected = category === cat.value;
+                return (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => setCategory(cat.value)}
+                    className="group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl p-4 text-left transition-all duration-200"
+                    style={{
+                      background: selected ? cat.bg : "rgba(255,255,255,0.03)",
+                      border: `1.5px solid ${selected ? cat.color : "rgba(255,255,255,0.08)"}`,
+                      boxShadow: selected ? `0 0 24px ${cat.color}30, inset 0 0 24px ${cat.color}08` : "none",
+                      transform: selected ? "scale(1.01)" : "scale(1)",
+                    }}
+                  >
+                    {/* Left colored bar */}
+                    <div
+                      className="absolute left-0 top-0 h-full w-1 rounded-l-2xl transition-all duration-200"
+                      style={{ background: selected ? cat.color : "transparent" }}
+                    />
+
+                    {/* Emoji icon */}
+                    <div
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-3xl transition-all duration-200"
+                      style={{
+                        background: selected ? `${cat.color}30` : "rgba(255,255,255,0.05)",
+                        border: `1px solid ${selected ? cat.color + "50" : "rgba(255,255,255,0.08)"}`,
+                      }}
+                    >
+                      {cat.emoji}
+                    </div>
+
+                    {/* Text */}
+                    <div className="flex-1">
+                      <p
+                        className="text-base font-bold transition-colors duration-200"
+                        style={{ color: selected ? cat.color : "var(--cream)" }}
+                      >
+                        {cat.label}
+                      </p>
+                      <p className="mt-0.5 text-sm" style={{ color: "rgba(250,247,240,0.45)" }}>
+                        {cat.desc}
+                      </p>
+                    </div>
+
+                    {/* Check */}
+                    <div
+                      className="ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200"
+                      style={{
+                        background: selected ? cat.color : "rgba(255,255,255,0.05)",
+                        border: `1.5px solid ${selected ? cat.color : "rgba(255,255,255,0.12)"}`,
+                      }}
+                    >
+                      {selected && <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="var(--surface-0)" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <div>
-              <label
-                htmlFor={`${formId}-lng`}
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400"
+
+            <button
+              type="button"
+              disabled={!category}
+              onClick={() => setStep(1)}
+              className="btn-gold mt-6 w-full py-4 text-base disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {category ? `Continue with ${selectedCat?.label} →` : "Select a category to continue"}
+            </button>
+          </div>
+        )}
+
+        {/* ════════ STEP 1: Location ════════ */}
+        {step === 1 && (
+          <div className="animate-fade-in">
+            {/* Category chip */}
+            {selectedCat && (
+              <div
+                className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold"
+                style={{ background: selectedCat.bg, border: `1px solid ${selectedCat.border}`, color: selectedCat.color }}
               >
-                Longitude
-              </label>
-              <input
-                id={`${formId}-lng`}
-                readOnly
-                value={longitude}
-                placeholder="—"
-                className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3.5 text-base text-slate-800 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
+                {selectedCat.emoji} {selectedCat.label}
+              </div>
+            )}
+
+            <p className="mb-5 text-base font-semibold" style={{ color: "var(--cream)" }}>
+              Where is this issue located?
+            </p>
+
+            {/* GPS button */}
+            <button
+              type="button"
+              onClick={() => { void handleGetLocation(); }}
+              disabled={locationStatus === "loading"}
+              className="relative w-full overflow-hidden rounded-2xl py-5 text-center font-bold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                background:
+                  locationStatus === "success"
+                    ? "rgba(52,211,153,0.12)"
+                    : "linear-gradient(135deg, var(--green-800), var(--green-700))",
+                border: `1.5px solid ${locationStatus === "success" ? "rgba(52,211,153,0.4)" : locationStatus === "error" ? "rgba(239,68,68,0.4)" : "var(--green-600)"}`,
+                color: locationStatus === "success" ? "#6ee7b7" : "var(--cream)",
+                boxShadow: locationStatus === "success" ? "0 0 24px rgba(52,211,153,0.15)" : "var(--shadow-sm)",
+              }}
+            >
+              {locationStatus === "loading" ? (
+                <span className="flex items-center justify-center gap-3">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <span>Getting your location…</span>
+                </span>
+              ) : locationStatus === "success" ? (
+                <span className="flex items-center justify-center gap-2 text-base">
+                  ✓ Location captured
+                  <span className="ml-1 text-sm font-normal opacity-70">— tap to re-capture</span>
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2 text-base">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Use My Current Location
+                </span>
+              )}
+            </button>
+
+            {locationError && (
+              <p className="mt-3 rounded-xl border px-3 py-2.5 text-sm" style={{ background: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.25)", color: "#fca5a5" }} role="alert">
+                {locationError}
+              </p>
+            )}
+
+            {/* Coordinates display */}
+            {latitude && longitude && (
+              <div
+                className="mt-4 flex items-center justify-between rounded-xl px-4 py-3 animate-fade-in"
+                style={{ background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)" }}
+              >
+                <div className="flex items-center gap-2 text-sm" style={{ color: "#6ee7b7" }}>
+                  <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  GPS locked
+                </div>
+                <span className="font-mono text-xs" style={{ color: "rgba(250,247,240,0.45)" }}>
+                  {parseFloat(latitude).toFixed(5)}, {parseFloat(longitude).toFixed(5)}
+                </span>
+              </div>
+            )}
+
+            <p className="mt-4 text-center text-xs" style={{ color: "rgba(250,247,240,0.35)" }}>
+              Location helps authorities find and fix the issue faster.
+            </p>
+
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={() => setStep(0)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
+                ← Back
+              </button>
+              <button type="button" onClick={() => setStep(2)} className="btn-gold flex-[2] py-3.5 text-sm">
+                Continue →
+              </button>
             </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <label
-            htmlFor={`${formId}-category`}
-            className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200"
-          >
-            Category *
-          </label>
-          <select
-            id={`${formId}-category`}
-            name="category"
-            required
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full appearance-none rounded-xl border-2 border-slate-200 bg-white px-4 py-4 text-base text-slate-900 shadow-sm transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          >
-            <option value="">Select a category</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* ════════ STEP 2: Details + Photo ════════ */}
+        {step === 2 && (
+          <div className="animate-fade-in flex flex-col gap-5">
+            {/* Context chip */}
+            {selectedCat && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-bold"
+                  style={{ background: selectedCat.bg, border: `1px solid ${selectedCat.border}`, color: selectedCat.color }}
+                >
+                  {selectedCat.emoji} {selectedCat.label}
+                </div>
+                {latitude && (
+                  <span className="text-xs" style={{ color: "rgba(250,247,240,0.4)" }}>
+                    📍 {parseFloat(latitude).toFixed(3)}, {parseFloat(longitude).toFixed(3)}
+                  </span>
+                )}
+              </div>
+            )}
 
-        <div>
-          <label
-            htmlFor={`${formId}-description`}
-            className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200"
-          >
-            Description *
-          </label>
-          <textarea
-            id={`${formId}-description`}
-            name="description"
-            required
-            rows={5}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What happened? Where exactly? Is it blocking traffic or unsafe?"
-            className="w-full resize-y rounded-xl border-2 border-slate-200 bg-white px-4 py-4 text-base leading-relaxed text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
-          />
-        </div>
+            {/* Description */}
+            <div>
+              <label htmlFor={`${formId}-desc`} className="mb-2 block text-sm font-semibold" style={{ color: "var(--cream)" }}>
+                Describe the issue *
+              </label>
+              <textarea
+                id={`${formId}-desc`}
+                name="description"
+                required
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What happened? Where exactly? Is it blocking traffic or unsafe?"
+                className="input-dark resize-y leading-relaxed"
+                style={{ minHeight: "120px" }}
+              />
+              <p className="mt-1.5 text-right text-xs" style={{ color: description.length > 20 ? "rgba(250,247,240,0.35)" : "rgba(250,247,240,0.2)" }}>
+                {description.length} chars
+              </p>
+            </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-xl bg-slate-900 px-5 py-4 text-base font-semibold text-white shadow-lg transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-sky-600 dark:hover:bg-sky-500"
-        >
-          {submitting ? "Submitting..." : "Submit Report"}
-        </button>
+            {/* Photo section */}
+            <div>
+              <p className="mb-3 text-sm font-semibold" style={{ color: "var(--cream)" }}>
+                Add a photo <span style={{ color: "rgba(250,247,240,0.4)", fontWeight: 400 }}>(optional)</span>
+              </p>
+
+              {/* Hidden file inputs */}
+              <input
+                ref={galleryRef}
+                id={`${formId}-gallery`}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => applyFile(e.target.files?.[0] ?? null)}
+              />
+              <input
+                ref={cameraRef}
+                id={`${formId}-camera`}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => applyFile(e.target.files?.[0] ?? null)}
+              />
+
+              {/* Photo preview or upload UI */}
+              {imagePreviewUrl && !previewLoadError ? (
+                <div
+                  className="relative overflow-hidden rounded-2xl animate-fade-in"
+                  style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imagePreviewUrl} alt="Issue preview" className="max-h-52 w-full object-cover" onError={() => setPreviewLoadError(true)} />
+                  <div
+                    className="absolute inset-x-0 bottom-0 flex items-center justify-between px-3 py-2"
+                    style={{ background: "rgba(6,15,9,0.8)", backdropFilter: "blur(8px)" }}
+                  >
+                    <span className="truncate text-xs font-medium" style={{ color: "var(--green-300)" }}>
+                      ✓ {imageFile?.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { applyFile(null); if (galleryRef.current) galleryRef.current.value = ""; if (cameraRef.current) cameraRef.current.value = ""; }}
+                      className="ml-2 shrink-0 text-xs font-semibold"
+                      style={{ color: "rgba(250,100,100,0.7)" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Camera button */}
+                  <label
+                    htmlFor={`${formId}-camera`}
+                    className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl py-6 text-center transition-all"
+                    style={{
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1.5px dashed rgba(255,255,255,0.15)",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLLabelElement).style.borderColor = "var(--green-500)"; (e.currentTarget as HTMLLabelElement).style.background = "rgba(30,122,64,0.08)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLLabelElement).style.borderColor = "rgba(255,255,255,0.15)"; (e.currentTarget as HTMLLabelElement).style.background = "rgba(255,255,255,0.04)"; }}
+                  >
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-full text-2xl"
+                      style={{ background: "rgba(30,122,64,0.15)" }}
+                    >
+                      📷
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--cream)" }}>Take Photo</p>
+                      <p className="text-xs" style={{ color: "rgba(250,247,240,0.4)" }}>Open camera</p>
+                    </div>
+                  </label>
+
+                  {/* Gallery button */}
+                  <label
+                    htmlFor={`${formId}-gallery`}
+                    className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl py-6 text-center transition-all"
+                    style={{
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1.5px dashed rgba(255,255,255,0.15)",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLLabelElement).style.borderColor = "var(--gold-500)"; (e.currentTarget as HTMLLabelElement).style.background = "rgba(212,160,23,0.06)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLLabelElement).style.borderColor = "rgba(255,255,255,0.15)"; (e.currentTarget as HTMLLabelElement).style.background = "rgba(255,255,255,0.04)"; }}
+                  >
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-full text-2xl"
+                      style={{ background: "rgba(212,160,23,0.1)" }}
+                    >
+                      🖼️
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--cream)" }}>Choose Photo</p>
+                      <p className="text-xs" style={{ color: "rgba(250,247,240,0.4)" }}>From gallery</p>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setStep(1)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
+                ← Back
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !description.trim()}
+                className="btn-gold flex-[2] py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {submitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--surface-0)] border-t-transparent" />
+                    Submitting…
+                  </span>
+                ) : "Submit Report 🚀"}
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

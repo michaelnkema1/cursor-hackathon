@@ -1,21 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
   subsets: ["latin"],
+  display: "swap",
+  weight: ["600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
-  title: "Civic Ghana — Community infrastructure reporting",
+  title: "IGP — Infrastructure Ghana Platform",
   description:
-    "Report roads, water, power, and sanitation issues to authorities across Ghana.",
+    "Report roads, water, power, and sanitation issues to authorities across Ghana. AI-powered triage and real-time status updates.",
 };
 
 export default function RootLayout({
@@ -26,12 +29,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${montserrat.variable} h-full`}
     >
       <body className="flex min-h-full flex-col">
         <a
           href="#main-content"
-          className="fixed left-4 top-4 z-[2000] -translate-y-24 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white opacity-0 shadow-lg transition focus:translate-y-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-sky-300"
+          className="fixed left-4 top-4 z-[9999] -translate-y-24 rounded-lg bg-[var(--gold-500)] px-4 py-2 text-sm font-bold text-[var(--surface-0)] opacity-0 shadow-lg transition focus:translate-y-0 focus:opacity-100 focus:outline-none"
         >
           Skip to main content
         </a>

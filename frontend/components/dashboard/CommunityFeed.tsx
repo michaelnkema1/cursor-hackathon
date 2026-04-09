@@ -6,22 +6,33 @@ import { categoryPinColor } from "@/lib/reports";
 function statusStyles(status: IssueStatus): string {
   switch (status) {
     case "Reported":
-      return "bg-amber-100 text-amber-900 ring-amber-200/80 dark:bg-amber-950/60 dark:text-amber-100 dark:ring-amber-800/60";
+      return "status-reported";
     case "Investigating":
-      return "bg-sky-100 text-sky-900 ring-sky-200/80 dark:bg-sky-950/60 dark:text-sky-100 dark:ring-sky-800/60";
+      return "status-investigating";
     case "Resolved":
-      return "bg-emerald-100 text-emerald-900 ring-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-100 dark:ring-emerald-800/60";
+      return "status-resolved";
     default:
-      return "bg-slate-100 text-slate-800 ring-slate-200";
+      return "";
   }
 }
 
-function formatTime(iso: string): string {
+const CATEGORY_ICONS: Record<string, string> = {
+  Water: "💧",
+  Roads: "🛣️",
+  Electricity: "⚡",
+  Health: "🏥",
+  Sanitation: "♻️",
+};
+
+function formatTimeAgo(iso: string): string {
   try {
-    return new Intl.DateTimeFormat("en-GH", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   } catch {
     return iso;
   }
@@ -33,69 +44,121 @@ type CommunityFeedProps = {
   onSelectReport: (id: string) => void;
 };
 
-export function CommunityFeed({
-  reports,
-  selectedId,
-  onSelectReport,
-}: CommunityFeedProps) {
+export function CommunityFeed({ reports, selectedId, onSelectReport }: CommunityFeedProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-slate-200/80 bg-white/95 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-black/40 lg:border-t-0 lg:border-l lg:shadow-none">
-      <div className="shrink-0 border-b border-slate-200/80 px-4 py-3 dark:border-slate-800">
-        <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
-          Community feed
-        </h2>
-        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-          Recent infrastructure reports across Ghana
+    <div
+      className="flex h-full min-h-0 flex-col"
+      style={{ background: "var(--surface-1)" }}
+    >
+      {/* Header */}
+      <div
+        className="shrink-0 px-4 py-3"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div className="flex items-center gap-2">
+          <h2
+            className="text-sm font-bold text-[var(--cream)]"
+            style={{ fontFamily: "var(--font-montserrat)" }}
+          >
+            Community Feed
+          </h2>
+          <span
+            className="animate-pulse-dot h-2 w-2 shrink-0 rounded-full"
+            style={{ background: "var(--green-400)" }}
+          />
+        </div>
+        <p className="mt-0.5 text-xs" style={{ color: "rgba(250,247,240,0.45)" }}>
+          Infrastructure reports across Ghana
         </p>
       </div>
-      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4">
-        {reports.map((report) => {
-          const active = report.id === selectedId;
-          const dot = categoryPinColor(report.category);
-          return (
-            <li key={report.id}>
-              <button
-                type="button"
-                onClick={() => onSelectReport(report.id)}
-                className={`flex w-full items-start gap-2 rounded-xl border px-3 py-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${
-                  active
-                    ? "border-sky-300 bg-sky-50/90 ring-1 ring-sky-200 dark:border-sky-700 dark:bg-sky-950/40 dark:ring-sky-900"
-                    : "border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40 dark:hover:border-slate-700 dark:hover:bg-slate-900"
-                }`}
+
+      {/* List */}
+      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">
+        {reports.length === 0 ? (
+          <li className="py-8 text-center">
+            <p className="text-sm" style={{ color: "rgba(250,247,240,0.4)" }}>
+              No reports loaded.
+            </p>
+          </li>
+        ) : (
+          reports.map((report, i) => {
+            const active = report.id === selectedId;
+            const dot = categoryPinColor(report.category);
+            const icon = CATEGORY_ICONS[report.category] ?? "📌";
+            return (
+              <li
+                key={report.id}
+                className="animate-fade-in"
+                style={{ animationDelay: `${Math.min(i * 0.04, 0.4)}s` }}
               >
-                <span
-                  className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white dark:ring-slate-900"
-                  style={{ backgroundColor: dot }}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      {report.category}
-                    </span>
+                <button
+                  type="button"
+                  onClick={() => onSelectReport(report.id)}
+                  className="group w-full overflow-hidden rounded-xl text-left transition-all"
+                  style={{
+                    background: active ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${active ? "var(--gold-500)" : "rgba(255,255,255,0.08)"}`,
+                    boxShadow: active ? "0 0 0 1px rgba(212,160,23,0.3), var(--shadow-md)" : "none",
+                  }}
+                >
+                  {/* Category colour stripe */}
+                  <div className="h-[3px] w-full" style={{ background: dot }} />
+                  <div className="flex items-start gap-3 px-3 py-3">
+                    {/* Category icon */}
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${statusStyles(report.status)}`}
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base"
+                      style={{ background: `${dot}22` }}
                     >
-                      {report.status}
+                      {icon}
                     </span>
-                  </span>
-                  <span className="mt-1 block font-semibold text-slate-900 dark:text-slate-100">
-                    {report.title}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
-                    {report.locationLabel}
-                  </span>
-                  <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-                    {report.description}
-                  </span>
-                  <span className="mt-2 block text-[10px] text-slate-400 dark:text-slate-500">
-                    {formatTime(report.reportedAt)}
-                  </span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
+                    <div className="min-w-0 flex-1">
+                      {/* Category + status */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-widest"
+                          style={{ color: dot }}
+                        >
+                          {report.category}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${statusStyles(report.status)}`}
+                        >
+                          {report.status}
+                        </span>
+                      </div>
+                      {/* Title */}
+                      <p
+                        className="mt-1 text-sm font-semibold leading-snug"
+                        style={{ color: "var(--cream)" }}
+                      >
+                        {report.title}
+                      </p>
+                      {/* Location */}
+                      <p className="mt-0.5 flex items-center gap-1 text-xs" style={{ color: "rgba(250,247,240,0.5)" }}>
+                        <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        {report.locationLabel}
+                      </p>
+                      {/* Description */}
+                      <p
+                        className="mt-1.5 line-clamp-2 text-xs leading-relaxed"
+                        style={{ color: "rgba(250,247,240,0.45)" }}
+                      >
+                        {report.description}
+                      </p>
+                      {/* Time */}
+                      <p className="mt-2 text-[10px]" style={{ color: "rgba(250,247,240,0.3)" }}>
+                        {formatTimeAgo(report.reportedAt)}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </li>
+            );
+          })
+        )}
       </ul>
     </div>
   );

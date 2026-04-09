@@ -20,120 +20,218 @@ type HomeDashboardClientProps = {
   error: string | null;
 };
 
-function cardClassForStatus(status: string): string {
+function getStatusStyle(status: string): { bar: string; badge: string; label: string } {
   switch (status) {
     case "Reported":
-      return "border-red-400 bg-red-50/95 text-red-900 ring-1 ring-red-200/80 dark:border-red-600 dark:bg-red-950/50 dark:text-red-100 dark:ring-red-900/60";
+      return {
+        bar: "var(--status-reported)",
+        badge: "status-reported",
+        label: "Reported",
+      };
     case "Investigating":
-      return "border-amber-400 bg-amber-50/95 text-amber-950 ring-1 ring-amber-200/80 dark:border-amber-500 dark:bg-amber-950/45 dark:text-amber-50 dark:ring-amber-900/50";
+      return {
+        bar: "var(--status-investigating)",
+        badge: "status-investigating",
+        label: "Investigating",
+      };
     case "Resolved":
-      return "border-emerald-400 bg-emerald-50/95 text-emerald-950 ring-1 ring-emerald-200/80 dark:border-emerald-600 dark:bg-emerald-950/45 dark:text-emerald-100 dark:ring-emerald-900/50";
+      return {
+        bar: "var(--status-resolved)",
+        badge: "status-resolved",
+        label: "Resolved",
+      };
     default:
-      return "border-slate-200 bg-white text-slate-900 ring-1 ring-slate-200/80 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-800";
+      return { bar: "var(--green-600)", badge: "", label: status };
   }
 }
 
-export function HomeDashboardClient({
-  issues,
-  error,
-}: HomeDashboardClientProps) {
+function formatTimeAgo(iso: string): string {
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  } catch {
+    return iso;
+  }
+}
+
+const STAT_LABELS: Record<string, string> = {
+  Reported: "Reported",
+  Investigating: "Active",
+  Resolved: "Resolved",
+};
+
+export function HomeDashboardClient({ issues, error }: HomeDashboardClientProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const counts = {
+    Reported: issues.filter((i) => i.status === "Reported").length,
+    Investigating: issues.filter((i) => i.status === "Investigating").length,
+    Resolved: issues.filter((i) => i.status === "Resolved").length,
+  };
+
   return (
-    <div className="flex min-h-dvh flex-1 flex-col bg-slate-50 dark:bg-slate-950">
-      <header className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 dark:border-slate-800 dark:bg-slate-950">
-        <span className="text-sm font-bold tracking-tight text-sky-600 dark:text-sky-400">
-          Civic Ghana
-        </span>
-        <DashboardHamburgerMenu />
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <aside
-        className="relative z-30 flex max-h-[min(55vh,24rem)] w-full shrink-0 flex-col overflow-hidden border-b border-slate-200 bg-white lg:max-h-none lg:w-[min(100%,22rem)] lg:overflow-visible lg:border-b-0 lg:border-r dark:border-slate-800 dark:bg-slate-950"
-        aria-label="Live reports"
+    <div className="flex min-h-dvh flex-1 flex-col" style={{ background: "var(--surface-0)" }}>
+      {/* ── Header ── */}
+      <header
+        className="glass-dark relative z-40 shrink-0"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
       >
-        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-          <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
-            Live Reports
-          </h2>
-          <div className="mt-3 w-full">
+        <div className="ghana-stripe h-[3px] w-full" />
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+          <Link href="/" className="flex items-center gap-2">
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-black text-[var(--surface-0)]"
+              style={{ background: "linear-gradient(135deg, var(--gold-500), var(--gold-300))" }}
+            >
+              IG
+            </div>
+            <span
+              className="text-sm font-black tracking-tight text-[var(--cream)]"
+              style={{ fontFamily: "var(--font-montserrat)" }}
+            >
+              IGP
+            </span>
+          </Link>
+          <DashboardHamburgerMenu />
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* ── Sidebar ── */}
+        <aside
+          className="relative z-30 flex max-h-[min(55vh,26rem)] w-full shrink-0 flex-col overflow-hidden lg:max-h-none lg:w-[min(100%,22rem)] lg:overflow-visible"
+          style={{
+            background: "var(--surface-1)",
+            borderRight: "1px solid rgba(255,255,255,0.07)",
+          }}
+          aria-label="Live reports"
+        >
+          {/* Sidebar header */}
+          <div
+            className="shrink-0 px-4 py-4"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--cream)]" style={{ fontFamily: "var(--font-montserrat)" }}>
+                Live Reports
+              </h2>
+              <span
+                className="animate-pulse-dot h-2 w-2 rounded-full"
+                style={{ background: "var(--green-400)" }}
+                title="Live"
+              />
+            </div>
+
+            {/* Stat chips */}
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {(["Reported", "Investigating", "Resolved"] as const).map((st) => (
+                <div
+                  key={st}
+                  className="rounded-xl px-2 py-2 text-center"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  <p
+                    className="text-lg font-black"
+                    style={{ fontFamily: "var(--font-montserrat)", color: st === "Reported" ? "var(--status-reported)" : st === "Investigating" ? "var(--status-investigating)" : "var(--status-resolved)" }}
+                  >
+                    {counts[st]}
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-medium" style={{ color: "rgba(250,247,240,0.5)" }}>
+                    {STAT_LABELS[st]}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Report CTA */}
             <a
               href="/report"
-              className="block w-full min-h-12 rounded-xl bg-blue-600 px-4 py-3 text-center text-base font-bold text-white shadow-md ring-1 ring-blue-500/30 transition-all hover:bg-blue-700 hover:shadow-lg active:scale-[0.98] active:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500 dark:active:bg-blue-700"
+              className="btn-gold mt-3 flex w-full items-center justify-center gap-1.5 py-3 text-sm"
             >
-              + Report New Issue
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Report New Issue
             </a>
+
+            <p className="mt-3">
+              <Link
+                href="/dashboard"
+                className="text-xs font-semibold transition-colors"
+                style={{ color: "var(--green-400)" }}
+              >
+                Open full-screen map dashboard →
+              </Link>
+            </p>
           </div>
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-            Pulled from{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px] dark:bg-slate-800">
-              /api/issues
-            </code>
-          </p>
-          <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-500">
-            Tap a report to show it on the map. Sign in and more are in the
-            top-right menu.
-          </p>
-          <p className="mt-3">
-            <Link
-              href="/dashboard"
-              className="text-xs font-semibold text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
-            >
-              Open full-screen map dashboard →
-            </Link>
-          </p>
-        </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
-          {error ? (
-            <p
-              className="rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : issues.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              No reports returned.
-            </p>
-          ) : (
-            issues.map((issue) => {
-              const id = String(issue.id);
-              const active = selectedId === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedId((prev) => (prev === id ? null : id))
-                  }
-                  className={`w-full rounded-xl border-2 p-3 text-left shadow-sm transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${cardClassForStatus(issue.status)} ${
-                    active
-                      ? "ring-2 ring-sky-500 ring-offset-2 ring-offset-white dark:ring-sky-400 dark:ring-offset-slate-950"
-                      : ""
-                  }`}
-                >
-                  {/* Use only phrasing content inside <button> (no <p>/<h3>/<div>) to avoid DOM repair + hydration errors */}
-                  <span className="block text-[10px] font-bold uppercase tracking-wide">
-                    {issue.status}
-                  </span>
-                  <span className="mt-1.5 block text-sm font-semibold leading-snug">
-                    {issue.title}
-                  </span>
-                  <span className="mt-2 block text-xs opacity-90">
-                    <span className="font-semibold">Type:</span> {issue.type}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </aside>
-      <main className="relative flex min-h-[50vh] flex-1 flex-col bg-slate-100 dark:bg-slate-900">
-        <MapWrapper
-          selectedId={selectedId}
-          onSelectReport={setSelectedId}
-        />
-      </main>
+
+          {/* Issue list */}
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
+            {error ? (
+              <p
+                className="rounded-xl border px-3 py-2.5 text-sm animate-fade-in"
+                style={{ background: "rgba(220,38,38,0.1)", borderColor: "rgba(220,38,38,0.3)", color: "#fca5a5" }}
+                role="alert"
+              >
+                {error}
+              </p>
+            ) : issues.length === 0 ? (
+              <p className="text-sm" style={{ color: "rgba(250,247,240,0.4)" }}>
+                No reports returned.
+              </p>
+            ) : (
+              issues.map((issue) => {
+                const id = String(issue.id);
+                const active = selectedId === id;
+                const style = getStatusStyle(issue.status);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSelectedId((prev) => (prev === id ? null : id))}
+                    className="w-full overflow-hidden rounded-xl text-left transition-all"
+                    style={{
+                      background: active ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.04)",
+                      border: `1px solid ${active ? "var(--gold-500)" : "rgba(255,255,255,0.08)"}`,
+                      boxShadow: active ? "var(--shadow-gold)" : "none",
+                      transform: active ? "scale(1.01)" : "scale(1)",
+                    }}
+                  >
+                    {/* Status bar */}
+                    <div className="h-[3px] w-full" style={{ background: style.bar }} />
+                    <div className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style.badge}`}
+                        >
+                          {style.label}
+                        </span>
+                        <span className="ml-auto text-[10px]" style={{ color: "rgba(250,247,240,0.4)" }}>
+                          {formatTimeAgo(issue.timestamp)}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-sm font-semibold leading-snug" style={{ color: "var(--cream)" }}>
+                        {issue.title}
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "rgba(250,247,240,0.55)" }}>
+                        <span className="font-medium" style={{ color: "rgba(250,247,240,0.7)" }}>Type:</span> {issue.type}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
+
+        {/* ── Map ── */}
+        <main className="relative flex min-h-[50vh] flex-1 flex-col" style={{ background: "var(--surface-0)" }}>
+          <MapWrapper selectedId={selectedId} onSelectReport={setSelectedId} />
+        </main>
       </div>
     </div>
   );
