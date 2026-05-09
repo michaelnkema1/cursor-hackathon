@@ -322,14 +322,20 @@ def update_issue_ai(
     structured_report: dict[str, Any] | None,
 ) -> None:
     payload: dict[str, Any] = {
-        "ai_category": ai_category,
-        "ai_severity": ai_severity,
-        "ai_summary": ai_summary,
-        "ai_model": ai_model,
-        "routed_organization_id": routed_organization_id,
+        key: value
+        for key, value in {
+            "ai_category": ai_category,
+            "ai_severity": ai_severity,
+            "ai_summary": ai_summary,
+            "ai_model": ai_model,
+            "routed_organization_id": routed_organization_id,
+        }.items()
+        if value is not None
     }
     if structured_report is not None:
         payload["structured_report"] = structured_report
+    if not payload:
+        return
     supabase.table(ISSUES_TABLE).update(payload).eq("id", str(issue_id)).execute()
 
 
