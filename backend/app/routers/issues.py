@@ -6,7 +6,7 @@ from supabase import Client
 
 from app.config import Settings, get_settings
 from app.db_contract import ISSUES_NEARBY_RPC
-from app.deps import get_supabase, require_staff_profile, require_user
+from app.deps import get_profile, get_supabase, require_staff_profile, require_user
 from app.schemas import (
     CreateReportRequest,
     CreateReportResponse,
@@ -144,6 +144,44 @@ def _ensure_patch_permissions(staff: dict, body: PatchIssueRequest) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can update routing or duplicate controls",
         )
+
+
+def _ensure_user_can_read_issue(user: dict, issue_row: dict, supabase: Client) -> None:
+    user_id = str(user["sub"])
+    if str(issue_row.get("reporter_id")) == user_id:
+        return
+
+    profile = get_profile(supabase, user_id) or {}
+    role = profile.get("role") or "citizen"
+    if role == "admin":
+        return
+
+    issue_org_id = issue_row.get("routed_organization_id")
+    profile_org_id = profile.get("organization_id")
+    if (
+        role == "authority"
+        and issue_org_id is not None
+        and profile_org_id is not None
+        and str(issue_org_id) == str(profile_org_id)
+    ):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have access to this issue",
+    )
+
+
+def _fetch_issue_for_user(
+    supabase: Client,
+    issue_id: UUID,
+    user: dict,
+) -> dict:
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _ensure_user_can_read_issue(user, row, supabase)
+    return row
 
 
 @router.post("/reports", response_model=CreateReportResponse)
@@ -301,11 +339,10 @@ def issues_nearby(
 @router.get("/issues/{issue_id}", response_model=IssueDetail)
 def get_issue(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> IssueDetail:
-    row = issues_service.fetch_issue(supabase, issue_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    row = _fetch_issue_for_user(supabase, issue_id, user)
     media = issues_service.list_issue_media(supabase, issue_id)
     timeline = issues_service.list_issue_timeline(supabase, issue_id)
     duplicates = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
@@ -320,10 +357,10 @@ def get_issue(
 @router.get("/issues/{issue_id}/media", response_model=list[IssueMedia])
 def get_issue_media(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueMedia]:
-    if not issues_service.fetch_issue(supabase, issue_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _fetch_issue_for_user(supabase, issue_id, user)
     rows = issues_service.list_issue_media(supabase, issue_id)
     return [_row_to_media(r) for r in rows]
 
@@ -333,10 +370,10 @@ def get_issue_timeline(
     issue_id: UUID,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueTimelineEntry]:
-    if not issues_service.fetch_issue(supabase, issue_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _fetch_issue_for_user(supabase, issue_id, user)
     rows = issues_service.list_issue_timeline(supabase, issue_id, limit=limit, offset=offset)
     return [_row_to_timeline(r) for r in rows]
 
@@ -347,10 +384,10 @@ def get_issue_timeline(
 )
 def get_issue_duplicate_suggestions(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueDuplicateSuggestion]:
-    if not issues_service.fetch_issue(supabase, issue_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _fetch_issue_for_user(supabase, issue_id, user)
     rows = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
     return [_row_to_duplicate(r) for r in rows]
 
