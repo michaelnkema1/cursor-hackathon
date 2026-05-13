@@ -322,14 +322,20 @@ def update_issue_ai(
     structured_report: dict[str, Any] | None,
 ) -> None:
     payload: dict[str, Any] = {
-        "ai_category": ai_category,
-        "ai_severity": ai_severity,
-        "ai_summary": ai_summary,
-        "ai_model": ai_model,
-        "routed_organization_id": routed_organization_id,
+        key: value
+        for key, value in {
+            "ai_category": ai_category,
+            "ai_severity": ai_severity,
+            "ai_summary": ai_summary,
+            "ai_model": ai_model,
+            "routed_organization_id": routed_organization_id,
+        }.items()
+        if value is not None
     }
     if structured_report is not None:
         payload["structured_report"] = structured_report
+    if not payload:
+        return
     supabase.table(ISSUES_TABLE).update(payload).eq("id", str(issue_id)).execute()
 
 
@@ -345,6 +351,15 @@ def patch_issue(
     # so update first, then fetch the row in a second call.
     supabase.table(ISSUES_TABLE).update(changes).eq("id", str(issue_id)).execute()
     return fetch_issue(supabase, issue_id)
+
+
+def patch_issue_status(
+    supabase: Client,
+    issue_id: UUID,
+    *,
+    status: str,
+) -> dict[str, Any] | None:
+    return patch_issue(supabase, issue_id, changes={"status": status})
 
 
 def run_post_create_ai(
