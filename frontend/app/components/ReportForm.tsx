@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 /* ─── Category data ─── */
@@ -149,6 +150,7 @@ export function ReportForm() {
   const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const revokePreview = useCallback(() => {
@@ -209,11 +211,59 @@ export function ReportForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
+    setSubmitError(null);
+
+    if (!category) {
+      setStep(0);
+      setSubmitError("Select a category before submitting.");
+      return;
+    }
+
+    const lat = Number.parseFloat(latitude);
+    const lng = Number.parseFloat(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setStep(1);
+      setLocationStatus("error");
+      setLocationError("Capture your location before submitting the report.");
+      return;
+    }
+
+    if (imageFile) {
+      setSubmitError("Photo upload is not connected yet. Remove the photo or try again when uploads are available.");
+      return;
+    }
+
     setSubmitting(true);
-    window.setTimeout(() => { resetForm(); setSubmitting(false); setSuccess(true); }, 1_500);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat,
+          lng,
+          title: selectedCat?.label ?? category,
+          description: description.trim(),
+          description_language: "en",
+        }),
+      });
+      const data: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const detail =
+          data && typeof data === "object" && "detail" in data
+            ? String((data as { detail: unknown }).detail)
+            : `Report submission failed (${res.status})`;
+        throw new Error(detail);
+      }
+      resetForm();
+      setSuccess(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Report submission failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const selectedCat = CATEGORIES.find((c) => c.value === category);
@@ -249,9 +299,9 @@ export function ReportForm() {
             <button onClick={() => setSuccess(false)} className="btn-gold w-full py-3.5 text-base">
               Submit another report
             </button>
-            <a href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <Link href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
               View map
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -596,6 +646,12 @@ export function ReportForm() {
             </div>
 
             {/* Navigation */}
+            {submitError && (
+              <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ background: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.25)", color: "#fca5a5" }} role="alert">
+                {submitError}
+              </p>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setStep(1)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
                 ← Back
