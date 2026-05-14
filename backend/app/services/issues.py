@@ -347,6 +347,15 @@ def patch_issue(
     return fetch_issue(supabase, issue_id)
 
 
+def patch_issue_status(
+    supabase: Client,
+    issue_id: UUID,
+    *,
+    status: str,
+) -> dict[str, Any] | None:
+    return patch_issue(supabase, issue_id, changes={"status": status})
+
+
 def run_post_create_ai(
     settings: Settings,
     supabase: Client,
