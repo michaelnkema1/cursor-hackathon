@@ -154,3 +154,23 @@ def test_issue_media_rejects_unrelated_user(monkeypatch):
 
     assert response.status_code == 403
     list_media.assert_not_called()
+
+
+def test_report_rejects_media_path_outside_reporter_prefix(monkeypatch):
+    create_issue = MagicMock()
+    monkeypatch.setattr(issues_router.issues_service, "create_issue_row", create_issue)
+
+    with _client(user_sub=REPORTER_ID) as client:
+        response = client.post(
+            "/reports",
+            json={
+                "lat": 5.6037,
+                "lng": -0.187,
+                "description": "Unsafe bridge",
+                "photo_path": f"{OTHER_USER_ID}/private-photo.jpg",
+            },
+        )
+
+    assert response.status_code == 400
+    assert "photo_path" in response.json()["detail"]
+    create_issue.assert_not_called()

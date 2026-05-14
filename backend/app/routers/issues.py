@@ -171,6 +171,17 @@ def _ensure_issue_read_access(supabase: Client, user: dict, issue_row: dict) -> 
     )
 
 
+def _ensure_reporter_owns_media_paths(reporter_id: str, body: CreateReportRequest) -> None:
+    prefix = f"{reporter_id}/"
+    for field in ("photo_path", "audio_path", "video_path"):
+        path = getattr(body, field)
+        if path and not path.startswith(prefix):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{field} must reference an upload owned by the reporter",
+            )
+
+
 @router.post("/reports", response_model=CreateReportResponse)
 def submit_report(
     body: CreateReportRequest,
@@ -179,6 +190,7 @@ def submit_report(
     settings: Settings = Depends(get_settings),
 ) -> CreateReportResponse:
     reporter_id = user["sub"]
+    _ensure_reporter_owns_media_paths(reporter_id, body)
     issue_id = issues_service.create_issue_row(
         supabase,
         reporter_id=reporter_id,
