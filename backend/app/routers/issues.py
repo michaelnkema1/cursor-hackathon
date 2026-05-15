@@ -146,6 +146,28 @@ def _ensure_patch_permissions(staff: dict, body: PatchIssueRequest) -> None:
         )
 
 
+def _normalize_report_media_path(
+    path: str | None,
+    *,
+    reporter_id: str,
+    field_name: str,
+) -> str | None:
+    if path is None:
+        return None
+    normalized = path.strip().lstrip("/")
+    if not normalized or ".." in normalized.split("/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {field_name}",
+        )
+    if not normalized.startswith(f"{reporter_id}/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name} must reference an upload owned by the reporter",
+        )
+    return normalized
+
+
 @router.post("/reports", response_model=CreateReportResponse)
 def submit_report(
     body: CreateReportRequest,
@@ -154,6 +176,21 @@ def submit_report(
     settings: Settings = Depends(get_settings),
 ) -> CreateReportResponse:
     reporter_id = user["sub"]
+    photo_path = _normalize_report_media_path(
+        body.photo_path,
+        reporter_id=reporter_id,
+        field_name="photo_path",
+    )
+    audio_path = _normalize_report_media_path(
+        body.audio_path,
+        reporter_id=reporter_id,
+        field_name="audio_path",
+    )
+    video_path = _normalize_report_media_path(
+        body.video_path,
+        reporter_id=reporter_id,
+        field_name="video_path",
+    )
     issue_id = issues_service.create_issue_row(
         supabase,
         reporter_id=reporter_id,
@@ -162,9 +199,9 @@ def submit_report(
         title=body.title,
         description=body.description,
         voice_transcript=body.voice_transcript,
-        photo_path=body.photo_path,
-        audio_path=body.audio_path,
-        video_path=body.video_path,
+        photo_path=photo_path,
+        audio_path=audio_path,
+        video_path=video_path,
     )
     issues_service.append_event(
         supabase,
@@ -177,7 +214,7 @@ def submit_report(
             "title": body.title,
             "description_language": body.description_language,
             "voice_language": body.voice_language,
-            "video_path": body.video_path,
+            "video_path": video_path,
         },
     )
 
@@ -193,9 +230,9 @@ def submit_report(
                 description_language=body.description_language,
                 voice_transcript=body.voice_transcript,
                 voice_language=body.voice_language,
-                photo_path=body.photo_path,
-                audio_path=body.audio_path,
-                video_path=body.video_path,
+                photo_path=photo_path,
+                audio_path=audio_path,
+                video_path=video_path,
             )
         except Exception:
             logger.exception("Inline AI failed for issue %s", issue_id)
