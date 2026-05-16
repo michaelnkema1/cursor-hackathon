@@ -1,8 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getUser, clearUser } from "@/lib/auth";
+import { useSyncExternalStore } from "react";
+import { clearUser } from "@/lib/auth";
 import type { AuthUser } from "@/lib/auth";
+
+const AUTH_STORAGE_KEY = "igp_demo_user";
+
+function subscribeToAuth(onStoreChange: () => void) {
+  window.addEventListener("igp_auth_change", onStoreChange);
+  window.addEventListener("storage", onStoreChange);
+  return () => {
+    window.removeEventListener("igp_auth_change", onStoreChange);
+    window.removeEventListener("storage", onStoreChange);
+  };
+}
+
+function getAuthSnapshot() {
+  return localStorage.getItem(AUTH_STORAGE_KEY);
+}
+
+function getServerAuthSnapshot() {
+  return null;
+}
+
+function parseUser(snapshot: string | null): AuthUser | null {
+  if (!snapshot) return null;
+  try {
+    return JSON.parse(snapshot) as AuthUser;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * React hook that syncs with the localStorage auth store.
@@ -10,17 +38,17 @@ import type { AuthUser } from "@/lib/auth";
  * Automatically re-renders when auth state changes (across components).
  */
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    setUser(getUser());
-
-    const onAuthChange = () => setUser(getUser());
-    window.addEventListener("igp_auth_change", onAuthChange);
-    return () => window.removeEventListener("igp_auth_change", onAuthChange);
-  }, []);
+  const snapshot = useSyncExternalStore(
+    subscribeToAuth,
+    getAuthSnapshot,
+    getServerAuthSnapshot,
+  );
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const user = parseUser(snapshot);
 
   const signOut = () => {
     clearUser();
