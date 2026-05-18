@@ -150,6 +150,7 @@ export function ReportForm() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const revokePreview = useCallback(() => {
     if (previewObjectUrlRef.current) {
@@ -165,7 +166,7 @@ export function ReportForm() {
   const resetForm = useCallback(() => {
     setStep(0); setCategory(""); setDescription(""); setImageFile(null);
     revokePreview(); setLatitude(""); setLongitude("");
-    setLocationStatus("idle"); setLocationError(null);
+    setLocationStatus("idle"); setLocationError(null); setSubmitError(null);
     if (galleryRef.current) galleryRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
   }, [revokePreview]);
@@ -209,14 +210,58 @@ export function ReportForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const selectedCat = CATEGORIES.find((c) => c.value === category);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
-    window.setTimeout(() => { resetForm(); setSubmitting(false); setSuccess(true); }, 1_500);
-  };
+    setSubmitError(null);
 
-  const selectedCat = CATEGORIES.find((c) => c.value === category);
+    const trimmedDescription = description.trim();
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!category || !trimmedDescription) {
+      setSubmitError("Choose a category and describe the issue before submitting.");
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setSubmitError("Capture the issue location before submitting.");
+      return;
+    }
+    if (imageFile) {
+      setSubmitError("Photo upload is not available in this form yet. Remove the photo and submit the text report.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          lat,
+          lng,
+          title: `${selectedCat?.label ?? category} report`,
+          description: trimmedDescription,
+        }),
+      });
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = (data as { detail?: unknown }).detail;
+        throw new Error(
+          typeof detail === "string" && detail.trim()
+            ? detail
+            : `Report submission failed (${res.status}).`,
+        );
+      }
+      resetForm();
+      setSuccess(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Report submission failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   /* ── Success ── */
   if (success) {
@@ -280,6 +325,15 @@ export function ReportForm() {
       </div>
 
       <form id={formId} onSubmit={handleSubmit}>
+        {submitError && (
+          <p
+            className="mb-5 rounded-xl border px-3 py-2.5 text-sm animate-fade-in"
+            style={{ background: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.25)", color: "#fca5a5" }}
+            role="alert"
+          >
+            {submitError}
+          </p>
+        )}
 
         {/* ════════ STEP 0: Category ════════ */}
         {step === 0 && (
@@ -444,8 +498,13 @@ export function ReportForm() {
               <button type="button" onClick={() => setStep(0)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
                 ← Back
               </button>
-              <button type="button" onClick={() => setStep(2)} className="btn-gold flex-[2] py-3.5 text-sm">
-                Continue →
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                disabled={!latitude || !longitude}
+                className="btn-gold flex-[2] py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {latitude && longitude ? "Continue →" : "Capture location to continue"}
               </button>
             </div>
           </div>
@@ -593,6 +652,14 @@ export function ReportForm() {
                   </label>
                 </div>
               )}
+              {imageFile && (
+                <p
+                  className="mt-3 rounded-xl border px-3 py-2.5 text-sm"
+                  style={{ background: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.25)", color: "#fcd34d" }}
+                >
+                  Photo upload is not wired to storage in this form yet. Remove the photo before submitting so no media is silently dropped.
+                </p>
+              )}
             </div>
 
             {/* Navigation */}
@@ -602,7 +669,7 @@ export function ReportForm() {
               </button>
               <button
                 type="submit"
-                disabled={submitting || !description.trim()}
+                disabled={submitting || !description.trim() || !latitude || !longitude || Boolean(imageFile)}
                 className="btn-gold flex-[2] py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {submitting ? (
@@ -610,7 +677,7 @@ export function ReportForm() {
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--surface-0)] border-t-transparent" />
                     Submitting…
                   </span>
-                ) : "Submit Report 🚀"}
+                ) : imageFile ? "Remove photo to submit" : !latitude || !longitude ? "Capture location first" : "Submit Report 🚀"}
               </button>
             </div>
           </div>
