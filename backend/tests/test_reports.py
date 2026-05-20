@@ -97,6 +97,7 @@ def test_nearby_issues_do_not_expose_private_report_fields(client, monkeypatch):
     issue_id = uuid.uuid4()
     reporter_id = uuid.uuid4()
     now = datetime.now(UTC).isoformat()
+    response_now = now.replace("+00:00", "Z")
 
     monkeypatch.setattr(
         issues_router.issues_service,
@@ -141,8 +142,8 @@ def test_nearby_issues_do_not_expose_private_report_fields(client, monkeypatch):
         "category": "sanitation",
         "severity": 4,
         "is_likely_duplicate": False,
-        "created_at": now,
-        "updated_at": now,
+        "created_at": response_now,
+        "updated_at": response_now,
     }
     assert "reporter_id" not in row
     assert "description" not in row
