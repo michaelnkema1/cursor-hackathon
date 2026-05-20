@@ -72,6 +72,19 @@ class IssuePublic(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class IssueNearbyPublic(BaseModel):
+    id: UUID
+    status: Literal["open", "in_progress", "resolved"]
+    lat: float
+    lng: float
+    title: str
+    category: str | None = None
+    severity: int | None = None
+    is_likely_duplicate: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
 class IssueMedia(BaseModel):
     id: UUID
     issue_id: UUID

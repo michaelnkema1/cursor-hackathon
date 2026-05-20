@@ -14,12 +14,18 @@ export function useAuth() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    setUser(getUser());
+    const syncUser = () => {
+      setMounted(true);
+      setUser(getUser());
+    };
+    const timeoutId = window.setTimeout(syncUser, 0);
 
     const onAuthChange = () => setUser(getUser());
     window.addEventListener("igp_auth_change", onAuthChange);
-    return () => window.removeEventListener("igp_auth_change", onAuthChange);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("igp_auth_change", onAuthChange);
+    };
   }, []);
 
   const signOut = () => {

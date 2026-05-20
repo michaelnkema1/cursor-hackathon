@@ -26,9 +26,9 @@ type BackendIssue = {
   status: string;
   lat: number;
   lng: number;
-  description: string | null;
-  ai_category: string | null;
-  ai_summary: string | null;
+  title?: string | null;
+  category?: string | null;
+  severity?: number | null;
   created_at: string;
 };
 
@@ -100,8 +100,8 @@ function mapBackendStatus(s: string): IssueStatus {
   }
 }
 
-function mapCategory(ai: string | null, desc: string | null): IssueCategory {
-  const text = `${ai ?? ""} ${desc ?? ""}`.toLowerCase();
+function mapCategory(category: string | null | undefined, title: string | null | undefined): IssueCategory {
+  const text = `${category ?? ""} ${title ?? ""}`.toLowerCase();
   if (/water|leak|pipe|flood|drain|sewage/.test(text)) return "Water";
   if (/electric|power|transformer|cable|light/.test(text)) return "Electricity";
   if (/health|clinic|hospital|waste\s*bio/.test(text)) return "Health";
@@ -110,14 +110,11 @@ function mapCategory(ai: string | null, desc: string | null): IssueCategory {
 }
 
 function backendToRow(b: BackendIssue): IssueRow {
-  const title =
-    (b.ai_summary && b.ai_summary.trim()) ||
-    (b.description && b.description.trim()) ||
-    "Infrastructure report";
+  const title = (b.title && b.title.trim()) || "Infrastructure report";
   return {
     id: b.id,
     title,
-    type: mapCategory(b.ai_category, b.description),
+    type: mapCategory(b.category, b.title),
     status: mapBackendStatus(b.status),
     lat: b.lat,
     lng: b.lng,
