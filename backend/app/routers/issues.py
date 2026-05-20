@@ -14,6 +14,7 @@ from app.schemas import (
     IssueDuplicateSuggestion,
     IssueMapPoint,
     IssueMedia,
+    IssueNearbyPublic,
     IssuePublic,
     IssueTimelineEntry,
     PatchIssueRequest,
@@ -70,6 +71,25 @@ def _row_to_public(r: dict) -> IssuePublic:
         duplicate_score=r.get("duplicate_score"),
         is_likely_duplicate=bool(r.get("is_likely_duplicate") or False),
         resolved_at=r.get("resolved_at"),
+        created_at=r["created_at"],
+        updated_at=r["updated_at"],
+    )
+
+
+def _row_to_nearby_public(r: dict) -> IssueNearbyPublic:
+    category = r.get("category") or r.get("ai_category")
+    title = "Infrastructure report"
+    if isinstance(category, str) and category.strip():
+        title = f"{category.strip().replace('_', ' ').title()} report"
+    return IssueNearbyPublic(
+        id=r["id"],
+        status=r["status"],
+        lat=float(r["lat"]),
+        lng=float(r["lng"]),
+        title=title,
+        category=category,
+        severity=r.get("severity") or r.get("ai_severity"),
+        is_likely_duplicate=bool(r.get("is_likely_duplicate") or False),
         created_at=r["created_at"],
         updated_at=r["updated_at"],
     )
@@ -309,7 +329,7 @@ def issues_map(
     return [IssueMapPoint(**row) for row in rows]
 
 
-@router.get("/issues/nearby", response_model=list[IssuePublic])
+@router.get("/issues/nearby", response_model=list[IssueNearbyPublic])
 def issues_nearby(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
@@ -317,7 +337,7 @@ def issues_nearby(
     status_filter: str | None = Query(None, pattern="^(open|in_progress|resolved)$"),
     limit: int = Query(100, ge=1, le=500),
     supabase: Client = Depends(get_supabase),
-) -> list[IssuePublic]:
+) -> list[IssueNearbyPublic]:
     try:
         rows = issues_service.list_nearby(
             supabase,
@@ -336,7 +356,7 @@ def issues_nearby(
                 f"the `{ISSUES_NEARBY_RPC}` RPC (see app/db_contract.py)."
             ),
         ) from e
-    return [_row_to_public(r) for r in rows]
+    return [_row_to_nearby_public(r) for r in rows]
 
 
 @router.get("/issues/{issue_id}", response_model=IssueDetail)

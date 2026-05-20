@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 from app.routers import issues as issues_router
 
@@ -90,3 +91,61 @@ def test_issue_detail_rejects_unrelated_user(client, monkeypatch):
     response = client.get(f"/issues/{issue_id}")
 
     assert response.status_code == 403
+
+
+def test_nearby_issues_do_not_expose_private_report_fields(client, monkeypatch):
+    issue_id = uuid.uuid4()
+    reporter_id = uuid.uuid4()
+    now = datetime.now(UTC).isoformat()
+
+    monkeypatch.setattr(
+        issues_router.issues_service,
+        "list_nearby",
+        lambda *_args, **_kwargs: [
+            {
+                "id": str(issue_id),
+                "reporter_id": str(reporter_id),
+                "status": "open",
+                "lat": 5.6037,
+                "lng": -0.1870,
+                "title": "Sewage backing up behind my house",
+                "description": "Private home address and phone number",
+                "voice_transcript": "Sensitive caller transcript",
+                "photo_path": f"{reporter_id}/photo.jpg",
+                "audio_path": f"{reporter_id}/voice.m4a",
+                "video_path": f"{reporter_id}/video.mp4",
+                "ai_category": "sanitation",
+                "ai_severity": 4,
+                "ai_summary": "Sensitive AI summary",
+                "routed_organization_id": None,
+                "structured_report": {"private": "data"},
+                "category": None,
+                "severity": None,
+                "is_likely_duplicate": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+        ],
+    )
+
+    response = client.get("/issues/nearby?lat=5.6037&lng=-0.1870")
+
+    assert response.status_code == 200
+    [row] = response.json()
+    assert row == {
+        "id": str(issue_id),
+        "status": "open",
+        "lat": 5.6037,
+        "lng": -0.187,
+        "title": "Sanitation report",
+        "category": "sanitation",
+        "severity": 4,
+        "is_likely_duplicate": False,
+        "created_at": now,
+        "updated_at": now,
+    }
+    assert "reporter_id" not in row
+    assert "description" not in row
+    assert "voice_transcript" not in row
+    assert "photo_path" not in row
+    assert "structured_report" not in row
