@@ -12,10 +12,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase";
  */
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     void getUser()
       .then(setUser)
       .catch(() => setUser(null));
@@ -37,5 +35,5 @@ export function useAuth() {
     });
   };
 
-  return { user: mounted ? user : null, signOut, mounted };
+  return { user, signOut, mounted: true };
 }
