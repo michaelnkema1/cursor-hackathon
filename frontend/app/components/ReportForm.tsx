@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { getAccessToken } from "@/lib/auth";
+import { getReportStorageBucket, getSupabaseBrowserClient } from "@/lib/supabase";
 
 /* ─── Category data ─── */
 const CATEGORIES = [
@@ -149,6 +151,7 @@ export function ReportForm() {
   const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const revokePreview = useCallback(() => {
@@ -165,7 +168,7 @@ export function ReportForm() {
   const resetForm = useCallback(() => {
     setStep(0); setCategory(""); setDescription(""); setImageFile(null);
     revokePreview(); setLatitude(""); setLongitude("");
-    setLocationStatus("idle"); setLocationError(null);
+    setLocationStatus("idle"); setLocationError(null); setSubmitError(null);
     if (galleryRef.current) galleryRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
   }, [revokePreview]);
@@ -209,11 +212,83 @@ export function ReportForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
+    setSubmitError(null);
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!category) {
+      setSubmitError("Choose a category before submitting.");
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setSubmitError("Capture your location before submitting the report.");
+      setStep(1);
+      return;
+    }
+    if (!description.trim()) {
+      setSubmitError("Describe the issue before submitting.");
+      return;
+    }
     setSubmitting(true);
-    window.setTimeout(() => { resetForm(); setSubmitting(false); setSuccess(true); }, 1_500);
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new Error("Sign in before submitting a report.");
+      }
+
+      let photoPath: string | null = null;
+      if (imageFile) {
+        const signed = await fetch("/api/uploads/sign", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ filename: imageFile.name }),
+        });
+        if (!signed.ok) {
+          const body = await signed.json().catch(() => null);
+          throw new Error(body?.detail || "Could not prepare the photo upload.");
+        }
+        const upload: { path: string; token: string } = await signed.json();
+        const { error } = await getSupabaseBrowserClient()
+          .storage
+          .from(getReportStorageBucket())
+          .uploadToSignedUrl(upload.path, upload.token, imageFile, {
+            contentType: imageFile.type || "application/octet-stream",
+          });
+        if (error) throw new Error(error.message);
+        photoPath = upload.path;
+      }
+
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          lat,
+          lng,
+          title: selectedCat?.label ?? category,
+          description: description.trim(),
+          photo_path: photoPath,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail || `Report submission failed (${response.status}).`);
+      }
+
+      resetForm();
+      setSubmitting(false);
+      setSuccess(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not submit the report.");
+      setSubmitting(false);
+    }
   };
 
   const selectedCat = CATEGORIES.find((c) => c.value === category);
@@ -596,6 +671,11 @@ export function ReportForm() {
             </div>
 
             {/* Navigation */}
+            {submitError && (
+              <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ background: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.25)", color: "#fca5a5" }} role="alert">
+                {submitError}
+              </p>
+            )}
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setStep(1)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
                 ← Back
