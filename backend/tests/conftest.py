@@ -38,6 +38,8 @@ def client(settings: Settings, mock_supabase: MagicMock) -> TestClient:
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_supabase] = lambda: mock_supabase
-    app.dependency_overrides[require_user] = lambda: {"sub": "citizen-uuid-1"}
+    app.dependency_overrides[require_user] = lambda: {
+        "sub": "00000000-0000-0000-0000-000000000002"
+    }
     with TestClient(app) as test_client:
         yield test_client

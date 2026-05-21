@@ -10,7 +10,7 @@ from app.main import create_app
 
 
 ISSUE_ID = UUID("00000000-0000-0000-0000-000000000001")
-REPORTER_ID = "citizen-uuid-1"
+REPORTER_ID = "00000000-0000-0000-0000-000000000002"
 
 
 def issue_row(**overrides):

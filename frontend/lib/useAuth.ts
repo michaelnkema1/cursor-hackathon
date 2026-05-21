@@ -24,7 +24,6 @@ export function useAuth() {
       });
       return () => data.subscription.unsubscribe();
     } catch {
-      setUser(null);
       return undefined;
     }
   }, []);
