@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { getAccessToken } from "@/lib/auth";
 import { getReportStorageBucket, getSupabaseBrowserClient } from "@/lib/supabase";
@@ -324,9 +325,9 @@ export function ReportForm() {
             <button onClick={() => setSuccess(false)} className="btn-gold w-full py-3.5 text-base">
               Submit another report
             </button>
-            <a href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <Link href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
               View map
-            </a>
+            </Link>
           </div>
         </div>
       </div>
