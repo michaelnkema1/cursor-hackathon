@@ -296,7 +296,7 @@ def my_reports(
         limit=limit,
         offset=offset,
     )
-    return [_row_to_public_map_summary(r) for r in rows]
+    return [_row_to_public(r) for r in rows]
 
 
 @router.get("/staff/issues", response_model=list[IssuePublic])
@@ -315,7 +315,7 @@ def staff_issues(
         limit=limit,
         offset=offset,
     )
-    return [_row_to_public_map_summary(r) for r in rows]
+    return [_row_to_public(r) for r in rows]
 
 
 @router.get("/issues/map", response_model=list[IssueMapPoint])
@@ -365,7 +365,7 @@ def issues_nearby(
                 f"the `{ISSUES_NEARBY_RPC}` RPC (see app/db_contract.py)."
             ),
         ) from e
-    return [_row_to_public(r) for r in rows]
+    return [_row_to_public_map_summary(r) for r in rows]
 
 
 @router.get("/issues/{issue_id}", response_model=IssueDetail)
