@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { getUser, clearUser } from "@/lib/auth";
-import type { AuthUser } from "@/lib/auth";
 
 /**
  * React hook that syncs with the localStorage auth store.
@@ -10,22 +9,24 @@ import type { AuthUser } from "@/lib/auth";
  * Automatically re-renders when auth state changes (across components).
  */
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    setUser(getUser());
-
-    const onAuthChange = () => setUser(getUser());
-    window.addEventListener("igp_auth_change", onAuthChange);
-    return () => window.removeEventListener("igp_auth_change", onAuthChange);
-  }, []);
+  const user = useSyncExternalStore(
+    (onAuthChange) => {
+      window.addEventListener("igp_auth_change", onAuthChange);
+      return () => window.removeEventListener("igp_auth_change", onAuthChange);
+    },
+    getUser,
+    () => null,
+  );
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const signOut = () => {
     clearUser();
     window.location.href = "/";
   };
 
-  return { user: mounted ? user : null, signOut, mounted };
+  return { user, signOut, mounted };
 }
