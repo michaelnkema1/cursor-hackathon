@@ -62,12 +62,12 @@ def create_issue_row(
     reporter_id: str,
     lat: float,
     lng: float,
-    title: str | None,
-    description: str | None,
-    voice_transcript: str | None,
-    photo_path: str | None,
-    audio_path: str | None,
-    video_path: str | None,
+    title: str | None = None,
+    description: str | None = None,
+    voice_transcript: str | None = None,
+    photo_path: str | None = None,
+    audio_path: str | None = None,
+    video_path: str | None = None,
 ) -> UUID:
     row = {
         "reporter_id": reporter_id,
@@ -321,15 +321,21 @@ def update_issue_ai(
     routed_organization_id: str | None,
     structured_report: dict[str, Any] | None,
 ) -> None:
-    payload: dict[str, Any] = {
-        "ai_category": ai_category,
-        "ai_severity": ai_severity,
-        "ai_summary": ai_summary,
-        "ai_model": ai_model,
-        "routed_organization_id": routed_organization_id,
-    }
+    payload: dict[str, Any] = {}
+    if ai_category is not None:
+        payload["ai_category"] = ai_category
+    if ai_severity is not None:
+        payload["ai_severity"] = ai_severity
+    if ai_summary is not None:
+        payload["ai_summary"] = ai_summary
+    if ai_model is not None:
+        payload["ai_model"] = ai_model
+    if routed_organization_id is not None:
+        payload["routed_organization_id"] = routed_organization_id
     if structured_report is not None:
         payload["structured_report"] = structured_report
+    if not payload:
+        return
     supabase.table(ISSUES_TABLE).update(payload).eq("id", str(issue_id)).execute()
 
 
@@ -345,6 +351,15 @@ def patch_issue(
     # so update first, then fetch the row in a second call.
     supabase.table(ISSUES_TABLE).update(changes).eq("id", str(issue_id)).execute()
     return fetch_issue(supabase, issue_id)
+
+
+def patch_issue_status(
+    supabase: Client,
+    issue_id: UUID,
+    *,
+    status: str,
+) -> dict[str, Any] | None:
+    return patch_issue(supabase, issue_id, changes={"status": status})
 
 
 def run_post_create_ai(

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { saveUser } from "@/lib/auth";
+import { signUpWithPassword } from "@/lib/auth";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,21 +18,30 @@ export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [formMessage, setFormMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
+    setFormMessage(null);
     if (fullName.trim().length < 2) { setFormError("Please enter your full name."); return; }
     if (!EMAIL_RE.test(email.trim())) { setFormError("Enter a valid email address."); return; }
     if (password.length < 8) { setFormError("Password must be at least 8 characters."); return; }
     if (password !== confirm) { setFormError("Passwords do not match."); return; }
     if (!agree) { setFormError("Please agree to the terms to continue."); return; }
     setSubmitting(true);
-    window.setTimeout(() => {
-      // Save user immediately — they're now registered and signed in
-      saveUser(fullName.trim(), email.trim());
-      void router.push("/?signedIn=1");
-    }, 900);
+    try {
+      const result = await signUpWithPassword(fullName.trim(), email.trim(), password);
+      if (result.signedIn) {
+        void router.push("/?signedIn=1");
+        return;
+      }
+      setFormMessage("Account created. Check your email to confirm it, then sign in.");
+      setSubmitting(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not create account.");
+      setSubmitting(false);
+    }
   };
 
   const labelClass = "mb-1.5 block text-xs font-semibold uppercase tracking-wider";
@@ -43,6 +52,11 @@ export function SignupForm() {
       {formError && (
         <p className="rounded-xl border px-3 py-2 text-sm animate-fade-in" style={{ background: "rgba(220,38,38,0.1)", borderColor: "rgba(220,38,38,0.3)", color: "#fca5a5" }} role="alert">
           {formError}
+        </p>
+      )}
+      {formMessage && (
+        <p className="rounded-xl border px-3 py-2 text-sm animate-fade-in" style={{ background: "rgba(52,211,153,0.08)", borderColor: "rgba(52,211,153,0.25)", color: "#6ee7b7" }}>
+          {formMessage}
         </p>
       )}
 
@@ -71,7 +85,7 @@ export function SignupForm() {
       <label className="flex cursor-pointer items-start gap-3 touch-manipulation">
         <input type="checkbox" checked={agree} onChange={(ev) => setAgree(ev.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded" style={{ accentColor: "var(--gold-500)" }} />
         <span className="text-sm leading-snug" style={{ color: "rgba(250,247,240,0.55)" }}>
-          I agree to the <span className="font-medium" style={{ color: "var(--cream)" }}>demo terms</span> — this is a hackathon prototype.
+          I agree to the <span className="font-medium" style={{ color: "var(--cream)" }}>terms</span> and privacy policy.
         </span>
       </label>
 
