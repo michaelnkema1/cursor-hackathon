@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUser, clearUser } from "@/lib/auth";
+import { authUserFromSession, clearUser, getUser } from "@/lib/auth";
 import type { AuthUser } from "@/lib/auth";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 /**
  * React hook that syncs with the localStorage auth store.
@@ -11,21 +12,27 @@ import type { AuthUser } from "@/lib/auth";
  */
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    setUser(getUser());
+    void getUser()
+      .then(setUser)
+      .catch(() => setUser(null));
 
-    const onAuthChange = () => setUser(getUser());
-    window.addEventListener("igp_auth_change", onAuthChange);
-    return () => window.removeEventListener("igp_auth_change", onAuthChange);
+    try {
+      const { data } = getSupabaseBrowserClient().auth.onAuthStateChange((_event, session) => {
+        setUser(authUserFromSession(session));
+      });
+      return () => data.subscription.unsubscribe();
+    } catch {
+      return undefined;
+    }
   }, []);
 
   const signOut = () => {
-    clearUser();
-    window.location.href = "/";
+    void clearUser().finally(() => {
+      window.location.href = "/";
+    });
   };
 
-  return { user: mounted ? user : null, signOut, mounted };
+  return { user, signOut, mounted: true };
 }

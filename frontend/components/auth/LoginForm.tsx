@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useId, useState } from "react";
-import { saveUser } from "@/lib/auth";
+import { signInWithPassword } from "@/lib/auth";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,7 +19,7 @@ export function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
     if (!EMAIL_RE.test(email.trim())) {
@@ -31,13 +31,13 @@ export function LoginForm() {
       return;
     }
     setSubmitting(true);
-    window.setTimeout(() => {
-      // Save user to local auth store (demo — uses email prefix as name)
-      const name = email.split("@")[0].replace(/[._]/g, " ");
-      const displayName = name.charAt(0).toUpperCase() + name.slice(1);
-      saveUser(displayName, email);
+    try {
+      await signInWithPassword(email.trim(), password);
       void router.push("/?signedIn=1");
-    }, 900);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not sign in.");
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -70,7 +70,7 @@ export function LoginForm() {
       <div>
         <div className="mb-1.5 flex items-center justify-between">
           <label htmlFor={`${formId}-password`} className="text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(250,247,240,0.6)" }}>Password</label>
-          <span className="text-[10px]" style={{ color: "rgba(250,247,240,0.35)" }}>Demo — any 8+ chars</span>
+          <span className="text-[10px]" style={{ color: "rgba(250,247,240,0.35)" }}>Supabase account</span>
         </div>
         <div className="relative">
           <input id={`${formId}-password`} name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(ev) => setPassword(ev.target.value)} className="input-dark pr-20" placeholder="••••••••" required minLength={8} />
