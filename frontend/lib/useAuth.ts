@@ -10,11 +10,9 @@ import type { AuthUser } from "@/lib/auth";
  */
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setMounted(true);
     void getUser()
       .then((currentUser) => {
         if (active) setUser(currentUser);
@@ -38,5 +36,5 @@ export function useAuth() {
     });
   };
 
-  return { user: mounted ? user : null, signOut, mounted };
+  return { user, signOut, mounted: true };
 }
