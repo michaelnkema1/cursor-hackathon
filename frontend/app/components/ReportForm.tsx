@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createReport, uploadReportPhoto } from "@/lib/backendApi";
 
 /* ─── Category data ─── */
 const CATEGORIES = [
@@ -150,6 +151,7 @@ export function ReportForm() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const revokePreview = useCallback(() => {
     if (previewObjectUrlRef.current) {
@@ -165,7 +167,7 @@ export function ReportForm() {
   const resetForm = useCallback(() => {
     setStep(0); setCategory(""); setDescription(""); setImageFile(null);
     revokePreview(); setLatitude(""); setLongitude("");
-    setLocationStatus("idle"); setLocationError(null);
+    setLocationStatus("idle"); setLocationError(null); setFormError(null);
     if (galleryRef.current) galleryRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
   }, [revokePreview]);
@@ -209,11 +211,46 @@ export function ReportForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
-    window.setTimeout(() => { resetForm(); setSubmitting(false); setSuccess(true); }, 1_500);
+    setFormError(null);
+
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!category) {
+      setStep(0);
+      setFormError("Select an issue category before submitting.");
+      return;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setStep(1);
+      setFormError("Capture your location before submitting the report.");
+      return;
+    }
+    if (!description.trim()) {
+      setFormError("Describe the issue before submitting.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const photoPath = imageFile ? await uploadReportPhoto(imageFile) : null;
+      await createReport({
+        lat,
+        lng,
+        title: selectedCat?.label ?? category,
+        description: description.trim(),
+        description_language: "en",
+        photo_path: photoPath,
+      });
+      resetForm();
+      setSuccess(true);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not submit report.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const selectedCat = CATEGORIES.find((c) => c.value === category);
@@ -278,6 +315,16 @@ export function ReportForm() {
       >
         <StepBar step={step} />
       </div>
+
+      {formError && (
+        <p
+          className="mb-5 rounded-xl border px-3 py-2.5 text-sm animate-fade-in"
+          style={{ background: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.25)", color: "#fca5a5" }}
+          role="alert"
+        >
+          {formError}
+        </p>
+      )}
 
       <form id={formId} onSubmit={handleSubmit}>
 
@@ -444,8 +491,13 @@ export function ReportForm() {
               <button type="button" onClick={() => setStep(0)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
                 ← Back
               </button>
-              <button type="button" onClick={() => setStep(2)} className="btn-gold flex-[2] py-3.5 text-sm">
-                Continue →
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                disabled={!latitude || !longitude}
+                className="btn-gold flex-[2] py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {latitude && longitude ? "Continue →" : "Capture location to continue"}
               </button>
             </div>
           </div>

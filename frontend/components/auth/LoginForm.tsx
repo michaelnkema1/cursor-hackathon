@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useId, useState } from "react";
-import { saveUser } from "@/lib/auth";
+import { signInWithEmail } from "@/lib/auth";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,10 +19,11 @@ export function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
-    if (!EMAIL_RE.test(email.trim())) {
+    const normalizedEmail = email.trim();
+    if (!EMAIL_RE.test(normalizedEmail)) {
       setFormError("Enter a valid email address.");
       return;
     }
@@ -30,14 +31,14 @@ export function LoginForm() {
       setFormError("Password must be at least 8 characters.");
       return;
     }
-    setSubmitting(true);
-    window.setTimeout(() => {
-      // Save user to local auth store (demo — uses email prefix as name)
-      const name = email.split("@")[0].replace(/[._]/g, " ");
-      const displayName = name.charAt(0).toUpperCase() + name.slice(1);
-      saveUser(displayName, email);
+    try {
+      setSubmitting(true);
+      await signInWithEmail(normalizedEmail, password);
       void router.push("/?signedIn=1");
-    }, 900);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not sign in.");
+      setSubmitting(false);
+    }
   };
 
   return (
