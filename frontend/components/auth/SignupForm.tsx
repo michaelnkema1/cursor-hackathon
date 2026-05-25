@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { saveUser } from "@/lib/auth";
+import { signUpWithEmail } from "@/lib/auth";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,20 +19,24 @@ export function SignupForm() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
-    if (fullName.trim().length < 2) { setFormError("Please enter your full name."); return; }
-    if (!EMAIL_RE.test(email.trim())) { setFormError("Enter a valid email address."); return; }
+    const normalizedEmail = email.trim();
+    const normalizedName = fullName.trim();
+    if (normalizedName.length < 2) { setFormError("Please enter your full name."); return; }
+    if (!EMAIL_RE.test(normalizedEmail)) { setFormError("Enter a valid email address."); return; }
     if (password.length < 8) { setFormError("Password must be at least 8 characters."); return; }
     if (password !== confirm) { setFormError("Passwords do not match."); return; }
     if (!agree) { setFormError("Please agree to the terms to continue."); return; }
-    setSubmitting(true);
-    window.setTimeout(() => {
-      // Save user immediately — they're now registered and signed in
-      saveUser(fullName.trim(), email.trim());
-      void router.push("/?signedIn=1");
-    }, 900);
+    try {
+      setSubmitting(true);
+      const result = await signUpWithEmail(normalizedName, normalizedEmail, password);
+      void router.push(result.hasSession ? "/?signedIn=1" : "/login?registered=demo");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not create account.");
+      setSubmitting(false);
+    }
   };
 
   const labelClass = "mb-1.5 block text-xs font-semibold uppercase tracking-wider";

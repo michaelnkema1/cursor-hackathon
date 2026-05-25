@@ -1,10 +1,7 @@
 "use client";
 
-/**
- * Very lightweight client-side auth store using localStorage.
- * In a real app this would use Supabase JWT tokens.
- * For the demo: sign-in stores user info, sign-out clears it.
- */
+import type { Session, User } from "@supabase/supabase-js";
+import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export type AuthUser = {
   name: string;
@@ -12,28 +9,76 @@ export type AuthUser = {
   avatar: string; // first letter of name
 };
 
-const KEY = "igp_demo_user";
+function userToAuthUser(user: User | null): AuthUser | null {
+  if (!user?.email) return null;
+  const metadataName = user.user_metadata?.full_name;
+  const fallbackName = user.email.split("@")[0].replace(/[._-]/g, " ");
+  const name =
+    typeof metadataName === "string" && metadataName.trim()
+      ? metadataName.trim()
+      : fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1);
 
-export function saveUser(name: string, email: string) {
-  if (typeof window === "undefined") return;
-  const user: AuthUser = { name, email, avatar: name.charAt(0).toUpperCase() };
-  localStorage.setItem(KEY, JSON.stringify(user));
-  // Dispatch a custom event so all tabs/components know
-  window.dispatchEvent(new Event("igp_auth_change"));
+  return {
+    name,
+    email: user.email,
+    avatar: name.charAt(0).toUpperCase(),
+  };
 }
 
-export function clearUser() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(KEY);
-  window.dispatchEvent(new Event("igp_auth_change"));
+export async function signInWithEmail(
+  email: string,
+  password: string,
+): Promise<AuthUser | null> {
+  const { data, error } = await getSupabaseBrowserClient().auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) throw new Error(error.message);
+  return userToAuthUser(data.user);
 }
 
-export function getUser(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
+export async function signUpWithEmail(
+  fullName: string,
+  email: string,
+  password: string,
+): Promise<{ user: AuthUser | null; hasSession: boolean }> {
+  const { data, error } = await getSupabaseBrowserClient().auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  });
+  if (error) throw new Error(error.message);
+
+  return {
+    user: userToAuthUser(data.user),
+    hasSession: Boolean(data.session),
+  };
+}
+
+export async function clearUser(): Promise<void> {
+  const { error } = await getSupabaseBrowserClient().auth.signOut();
+  if (error) throw new Error(error.message);
+}
+
+export async function getUser(): Promise<AuthUser | null> {
+  const { data } = await getSupabaseBrowserClient().auth.getSession();
+  return userToAuthUser(data.session?.user ?? null);
+}
+
+export function onAuthStateChange(
+  callback: (user: AuthUser | null) => void,
+): () => void {
+  const {
+    data: { subscription },
+  } = getSupabaseBrowserClient().auth.onAuthStateChange(
+    (_event: string, session: Session | null) => {
+      callback(userToAuthUser(session?.user ?? null));
+    },
+  );
+
+  return () => subscription.unsubscribe();
 }
