@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUser, clearUser } from "@/lib/auth";
+import { getUser, onAuthChange, signOut as signOutSupabase } from "@/lib/auth";
 import type { AuthUser } from "@/lib/auth";
 
 /**
@@ -14,17 +14,32 @@ export function useAuth() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    let active = true;
     setMounted(true);
-    setUser(getUser());
+    getUser()
+      .then((nextUser) => {
+        if (active) setUser(nextUser);
+      })
+      .catch(() => {
+        if (active) setUser(null);
+      });
 
-    const onAuthChange = () => setUser(getUser());
-    window.addEventListener("igp_auth_change", onAuthChange);
-    return () => window.removeEventListener("igp_auth_change", onAuthChange);
+    let unsubscribe: (() => void) | null = null;
+    try {
+      unsubscribe = onAuthChange((nextUser) => setUser(nextUser));
+    } catch {
+      setUser(null);
+    }
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const signOut = () => {
-    clearUser();
-    window.location.href = "/";
+    void signOutSupabase().finally(() => {
+      window.location.href = "/";
+    });
   };
 
   return { user: mounted ? user : null, signOut, mounted };
