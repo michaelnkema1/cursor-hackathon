@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { getAccessToken, getSupabaseBrowserClient } from "@/lib/auth";
 
 /* ─── Category data ─── */
 const CATEGORIES = [
@@ -73,6 +75,27 @@ function getCurrentPositionPromise(opts: PositionOptions): Promise<GeolocationPo
 
 /* ─── Step indicator ─── */
 const STEPS = ["Category", "Location", "Details"] as const;
+
+type SignedUploadResponse = {
+  path: string;
+  signed_url: string;
+  token: string;
+};
+
+async function parseErrorResponse(res: Response): Promise<string> {
+  try {
+    const data: unknown = await res.json();
+    if (data && typeof data === "object" && "detail" in data) {
+      return String((data as { detail: unknown }).detail);
+    }
+    if (data && typeof data === "object" && "error" in data) {
+      return String((data as { error: unknown }).error);
+    }
+  } catch {
+    // Fall through to generic status text.
+  }
+  return res.statusText || "Request failed";
+}
 
 function StepBar({ step }: { step: number }) {
   return (
@@ -149,6 +172,7 @@ export function ReportForm() {
   const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const revokePreview = useCallback(() => {
@@ -165,7 +189,7 @@ export function ReportForm() {
   const resetForm = useCallback(() => {
     setStep(0); setCategory(""); setDescription(""); setImageFile(null);
     revokePreview(); setLatitude(""); setLongitude("");
-    setLocationStatus("idle"); setLocationError(null);
+    setLocationStatus("idle"); setLocationError(null); setSubmitError(null);
     if (galleryRef.current) galleryRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
   }, [revokePreview]);
@@ -209,11 +233,74 @@ export function ReportForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const uploadPhoto = async (file: File, accessToken: string): Promise<string> => {
+    const signRes = await fetch("/api/uploads/sign", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ filename: file.name }),
+    });
+    if (!signRes.ok) {
+      throw new Error(await parseErrorResponse(signRes));
+    }
+    const signedUpload = (await signRes.json()) as SignedUploadResponse;
+    const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "reports";
+    const { error } = await getSupabaseBrowserClient()
+      .storage
+      .from(bucket)
+      .uploadToSignedUrl(signedUpload.path, signedUpload.token, file);
+    if (error) throw error;
+    return signedUpload.path;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
-    window.setTimeout(() => { resetForm(); setSubmitting(false); setSuccess(true); }, 1_500);
+    setSubmitError(null);
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    if (!category || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setSubmitError("Capture your location before submitting the report.");
+      return;
+    }
+    if (!description.trim()) {
+      setSubmitError("Describe the issue before submitting.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        throw new Error("Sign in before submitting a report.");
+      }
+      const photoPath = imageFile ? await uploadPhoto(imageFile, accessToken) : null;
+      const reportRes = await fetch("/api/reports", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lat,
+          lng,
+          title: selectedCat ? `${selectedCat.label} report` : "Infrastructure report",
+          description: description.trim(),
+          description_language: "en",
+          photo_path: photoPath,
+        }),
+      });
+      if (!reportRes.ok) {
+        throw new Error(await parseErrorResponse(reportRes));
+      }
+      resetForm();
+      setSuccess(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Could not submit the report.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const selectedCat = CATEGORIES.find((c) => c.value === category);
@@ -249,9 +336,9 @@ export function ReportForm() {
             <button onClick={() => setSuccess(false)} className="btn-gold w-full py-3.5 text-base">
               Submit another report
             </button>
-            <a href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <Link href="/" className="block w-full rounded-xl py-3 text-center text-sm font-semibold transition-all" style={{ color: "rgba(250,247,240,0.5)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
               View map
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -444,8 +531,8 @@ export function ReportForm() {
               <button type="button" onClick={() => setStep(0)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
                 ← Back
               </button>
-              <button type="button" onClick={() => setStep(2)} className="btn-gold flex-[2] py-3.5 text-sm">
-                Continue →
+              <button type="button" disabled={!latitude || !longitude} onClick={() => setStep(2)} className="btn-gold flex-[2] py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-35">
+                {latitude && longitude ? "Continue →" : "Capture location to continue"}
               </button>
             </div>
           </div>
@@ -596,13 +683,18 @@ export function ReportForm() {
             </div>
 
             {/* Navigation */}
+            {submitError && (
+              <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ background: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.25)", color: "#fca5a5" }} role="alert">
+                {submitError}
+              </p>
+            )}
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setStep(1)} className="flex-1 rounded-xl py-3.5 text-sm font-semibold transition-all" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,247,240,0.65)" }}>
                 ← Back
               </button>
               <button
                 type="submit"
-                disabled={submitting || !description.trim()}
+                disabled={submitting || !description.trim() || !latitude || !longitude}
                 className="btn-gold flex-[2] py-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {submitting ? (
