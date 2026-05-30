@@ -12,6 +12,7 @@ from app.schemas import (
     SignedUploadResponse,
     SignUploadRequest,
 )
+from app.services import issues as issues_service
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -64,6 +65,18 @@ def create_signed_read_url(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only request read URLs for files under your user prefix",
+            )
+    elif role == "authority":
+        organization_id = (profile or {}).get("organization_id")
+        if not issues_service.storage_path_is_readable_by_staff(
+            supabase,
+            path=path,
+            role=role,
+            organization_id=str(organization_id) if organization_id else None,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only request read URLs for media assigned to your organization",
             )
     data = supabase.storage.from_(settings.supabase_storage_bucket).create_signed_url(
         path,
