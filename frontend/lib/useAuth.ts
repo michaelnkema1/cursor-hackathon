@@ -21,7 +21,7 @@ export function useAuth() {
     try {
       unsubscribe = onAuthChange((nextUser) => setUser(nextUser));
     } catch {
-      setUser(null);
+      unsubscribe = null;
     }
     return () => {
       active = false;
