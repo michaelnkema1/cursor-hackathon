@@ -299,7 +299,7 @@ def my_reports(
         limit=limit,
         offset=offset,
     )
-    return [_row_to_public_map_safe(r) for r in rows]
+    return [_row_to_public(r) for r in rows]
 
 
 @router.get("/staff/issues", response_model=list[IssuePublic])
@@ -318,7 +318,7 @@ def staff_issues(
         limit=limit,
         offset=offset,
     )
-    return [_row_to_public(r) for r in rows]
+    return [_row_to_public_map_safe(r) for r in rows]
 
 
 @router.get("/issues/map", response_model=list[IssueMapPoint])
