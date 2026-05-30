@@ -6,7 +6,7 @@ from supabase import Client
 
 from app.config import Settings, get_settings
 from app.db_contract import ISSUES_NEARBY_RPC
-from app.deps import get_supabase, require_staff_profile, require_user
+from app.deps import get_profile, get_supabase, require_staff_profile, require_user
 from app.schemas import (
     CreateReportRequest,
     CreateReportResponse,
@@ -68,6 +68,36 @@ def _row_to_public(r: dict) -> IssuePublic:
         ai_confidence=r.get("ai_confidence"),
         duplicate_of_id=r.get("duplicate_of_id"),
         duplicate_score=r.get("duplicate_score"),
+        is_likely_duplicate=bool(r.get("is_likely_duplicate") or False),
+        resolved_at=r.get("resolved_at"),
+        created_at=r["created_at"],
+        updated_at=r["updated_at"],
+    )
+
+
+def _row_to_public_map_safe(r: dict) -> IssuePublic:
+    return IssuePublic(
+        id=r["id"],
+        reporter_id=None,
+        status=r["status"],
+        lat=float(r["lat"]),
+        lng=float(r["lng"]),
+        title=None,
+        description=None,
+        photo_path=None,
+        audio_path=None,
+        video_path=None,
+        ai_category=r.get("ai_category") or r.get("category"),
+        ai_severity=r.get("ai_severity") or r.get("severity"),
+        ai_summary=None,
+        routed_organization_id=None,
+        category=r.get("category"),
+        subcategory=r.get("subcategory"),
+        severity=r.get("severity"),
+        ai_model=None,
+        ai_confidence=None,
+        duplicate_of_id=r.get("duplicate_of_id"),
+        duplicate_score=None,
         is_likely_duplicate=bool(r.get("is_likely_duplicate") or False),
         resolved_at=r.get("resolved_at"),
         created_at=r["created_at"],
@@ -146,6 +176,46 @@ def _ensure_patch_permissions(staff: dict, body: PatchIssueRequest) -> None:
         )
 
 
+def _validate_reporter_media_path(path: str | None, reporter_id: str) -> str | None:
+    if path is None:
+        return None
+    normalized = path.strip().lstrip("/")
+    if not normalized or ".." in normalized.split("/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid media path",
+        )
+    if not normalized.startswith(f"{reporter_id}/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Media path must be under your upload prefix",
+        )
+    return normalized
+
+
+def _ensure_user_can_read_issue(supabase: Client, user: dict, issue_row: dict) -> dict:
+    if str(issue_row.get("reporter_id")) == str(user["sub"]):
+        return {"role": "citizen", "organization_id": None}
+
+    profile = get_profile(supabase, user["sub"]) or {}
+    role = profile.get("role") or "citizen"
+    if role == "admin":
+        return profile
+    if role == "authority":
+        organization_id = profile.get("organization_id")
+        if organization_id and str(issue_row.get("routed_organization_id")) == str(organization_id):
+            return profile
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have access to this issue",
+    )
+
+
+def _can_view_duplicate_suggestions(profile: dict) -> bool:
+    return (profile.get("role") or "citizen") in ("authority", "admin")
+
+
 @router.post("/reports", response_model=CreateReportResponse)
 def submit_report(
     body: CreateReportRequest,
@@ -154,6 +224,9 @@ def submit_report(
     settings: Settings = Depends(get_settings),
 ) -> CreateReportResponse:
     reporter_id = user["sub"]
+    photo_path = _validate_reporter_media_path(body.photo_path, reporter_id)
+    audio_path = _validate_reporter_media_path(body.audio_path, reporter_id)
+    video_path = _validate_reporter_media_path(body.video_path, reporter_id)
     issue_id = issues_service.create_issue_row(
         supabase,
         reporter_id=reporter_id,
@@ -162,9 +235,9 @@ def submit_report(
         title=body.title,
         description=body.description,
         voice_transcript=body.voice_transcript,
-        photo_path=body.photo_path,
-        audio_path=body.audio_path,
-        video_path=body.video_path,
+        photo_path=photo_path,
+        audio_path=audio_path,
+        video_path=video_path,
     )
     issues_service.append_event(
         supabase,
@@ -177,7 +250,7 @@ def submit_report(
             "title": body.title,
             "description_language": body.description_language,
             "voice_language": body.voice_language,
-            "video_path": body.video_path,
+            "video_path": video_path,
         },
     )
 
@@ -193,9 +266,9 @@ def submit_report(
                 description_language=body.description_language,
                 voice_transcript=body.voice_transcript,
                 voice_language=body.voice_language,
-                photo_path=body.photo_path,
-                audio_path=body.audio_path,
-                video_path=body.video_path,
+                photo_path=photo_path,
+                audio_path=audio_path,
+                video_path=video_path,
             )
         except Exception:
             logger.exception("Inline AI failed for issue %s", issue_id)
@@ -226,7 +299,7 @@ def my_reports(
         limit=limit,
         offset=offset,
     )
-    return [_row_to_public(r) for r in rows]
+    return [_row_to_public_map_safe(r) for r in rows]
 
 
 @router.get("/staff/issues", response_model=list[IssuePublic])
@@ -301,14 +374,20 @@ def issues_nearby(
 @router.get("/issues/{issue_id}", response_model=IssueDetail)
 def get_issue(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> IssueDetail:
     row = issues_service.fetch_issue(supabase, issue_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    profile = _ensure_user_can_read_issue(supabase, user, row)
     media = issues_service.list_issue_media(supabase, issue_id)
     timeline = issues_service.list_issue_timeline(supabase, issue_id)
-    duplicates = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
+    duplicates = (
+        issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
+        if _can_view_duplicate_suggestions(profile)
+        else []
+    )
     return _row_to_detail(
         row,
         media=media,
@@ -320,10 +399,13 @@ def get_issue(
 @router.get("/issues/{issue_id}/media", response_model=list[IssueMedia])
 def get_issue_media(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueMedia]:
-    if not issues_service.fetch_issue(supabase, issue_id):
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _ensure_user_can_read_issue(supabase, user, row)
     rows = issues_service.list_issue_media(supabase, issue_id)
     return [_row_to_media(r) for r in rows]
 
@@ -333,10 +415,13 @@ def get_issue_timeline(
     issue_id: UUID,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueTimelineEntry]:
-    if not issues_service.fetch_issue(supabase, issue_id):
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _ensure_user_can_read_issue(supabase, user, row)
     rows = issues_service.list_issue_timeline(supabase, issue_id, limit=limit, offset=offset)
     return [_row_to_timeline(r) for r in rows]
 
@@ -347,10 +432,13 @@ def get_issue_timeline(
 )
 def get_issue_duplicate_suggestions(
     issue_id: UUID,
+    staff: dict = Depends(require_staff_profile),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueDuplicateSuggestion]:
-    if not issues_service.fetch_issue(supabase, issue_id):
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _ensure_authority_can_patch(staff, row)
     rows = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
     return [_row_to_duplicate(r) for r in rows]
 

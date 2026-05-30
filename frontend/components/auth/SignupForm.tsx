@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { saveUser } from "@/lib/auth";
+import { signUp } from "@/lib/auth";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,7 +19,7 @@ export function SignupForm() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
     if (fullName.trim().length < 2) { setFormError("Please enter your full name."); return; }
@@ -27,12 +27,15 @@ export function SignupForm() {
     if (password.length < 8) { setFormError("Password must be at least 8 characters."); return; }
     if (password !== confirm) { setFormError("Passwords do not match."); return; }
     if (!agree) { setFormError("Please agree to the terms to continue."); return; }
-    setSubmitting(true);
-    window.setTimeout(() => {
-      // Save user immediately — they're now registered and signed in
-      saveUser(fullName.trim(), email.trim());
+    try {
+      setSubmitting(true);
+      await signUp(fullName.trim(), email.trim(), password);
       void router.push("/?signedIn=1");
-    }, 900);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not create account.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const labelClass = "mb-1.5 block text-xs font-semibold uppercase tracking-wider";

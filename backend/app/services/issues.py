@@ -62,12 +62,12 @@ def create_issue_row(
     reporter_id: str,
     lat: float,
     lng: float,
-    title: str | None,
-    description: str | None,
-    voice_transcript: str | None,
-    photo_path: str | None,
-    audio_path: str | None,
-    video_path: str | None,
+    title: str | None = None,
+    description: str | None = None,
+    voice_transcript: str | None = None,
+    photo_path: str | None = None,
+    audio_path: str | None = None,
+    video_path: str | None = None,
 ) -> UUID:
     row = {
         "reporter_id": reporter_id,
@@ -292,6 +292,54 @@ def list_issue_duplicate_suggestions(
     ]
 
 
+def storage_path_is_readable_by_staff(
+    supabase: Client,
+    *,
+    path: str,
+    role: str,
+    organization_id: str | None,
+) -> bool:
+    if role == "admin":
+        return True
+    if role != "authority" or not organization_id:
+        return False
+
+    try:
+        media_res = (
+            supabase.table(ISSUE_MEDIA_TABLE)
+            .select("issue_id")
+            .eq("storage_path", path)
+            .execute()
+        )
+        issue_ids = [str(row["issue_id"]) for row in list(media_res.data or []) if row.get("issue_id")]
+        if issue_ids:
+            issue_res = (
+                supabase.table(ISSUES_TABLE)
+                .select("id")
+                .in_("id", issue_ids)
+                .eq("routed_organization_id", str(organization_id))
+                .limit(1)
+                .execute()
+            )
+            if issue_res.data:
+                return True
+
+        for column in ("photo_path", "audio_path", "video_path"):
+            issue_res = (
+                supabase.table(ISSUES_TABLE)
+                .select("id")
+                .eq(column, path)
+                .eq("routed_organization_id", str(organization_id))
+                .limit(1)
+                .execute()
+            )
+            if issue_res.data:
+                return True
+    except Exception as e:
+        logger.warning("Storage read authorization lookup failed for %s: %s", path, e)
+    return False
+
+
 def resolve_routed_org(supabase: Client, category: str | None) -> str | None:
     if not category:
         return None
@@ -321,15 +369,21 @@ def update_issue_ai(
     routed_organization_id: str | None,
     structured_report: dict[str, Any] | None,
 ) -> None:
-    payload: dict[str, Any] = {
-        "ai_category": ai_category,
-        "ai_severity": ai_severity,
-        "ai_summary": ai_summary,
-        "ai_model": ai_model,
-        "routed_organization_id": routed_organization_id,
-    }
+    payload: dict[str, Any] = {}
+    if ai_category is not None:
+        payload["ai_category"] = ai_category
+    if ai_severity is not None:
+        payload["ai_severity"] = ai_severity
+    if ai_summary is not None:
+        payload["ai_summary"] = ai_summary
+    if ai_model is not None:
+        payload["ai_model"] = ai_model
+    if routed_organization_id is not None:
+        payload["routed_organization_id"] = routed_organization_id
     if structured_report is not None:
         payload["structured_report"] = structured_report
+    if not payload:
+        return
     supabase.table(ISSUES_TABLE).update(payload).eq("id", str(issue_id)).execute()
 
 
@@ -345,6 +399,15 @@ def patch_issue(
     # so update first, then fetch the row in a second call.
     supabase.table(ISSUES_TABLE).update(changes).eq("id", str(issue_id)).execute()
     return fetch_issue(supabase, issue_id)
+
+
+def patch_issue_status(
+    supabase: Client,
+    issue_id: UUID,
+    *,
+    status: str,
+) -> dict[str, Any] | None:
+    return patch_issue(supabase, issue_id, changes={"status": status})
 
 
 def run_post_create_ai(
