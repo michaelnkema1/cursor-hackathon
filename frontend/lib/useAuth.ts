@@ -4,18 +4,11 @@ import { useEffect, useState } from "react";
 import { getUser, onAuthChange, signOut as signOutSupabase } from "@/lib/auth";
 import type { AuthUser } from "@/lib/auth";
 
-/**
- * React hook that syncs with the localStorage auth store.
- * Returns the current user and a signOut function.
- * Automatically re-renders when auth state changes (across components).
- */
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setMounted(true);
     getUser()
       .then((nextUser) => {
         if (active) setUser(nextUser);
@@ -42,5 +35,5 @@ export function useAuth() {
     });
   };
 
-  return { user: mounted ? user : null, signOut, mounted };
+  return { user, signOut, mounted: true };
 }
