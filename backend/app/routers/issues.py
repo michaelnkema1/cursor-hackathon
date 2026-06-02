@@ -6,7 +6,8 @@ from supabase import Client
 
 from app.config import Settings, get_settings
 from app.db_contract import ISSUES_NEARBY_RPC
-from app.deps import get_supabase, require_staff_profile, require_user
+from app.deps import get_profile, get_supabase, require_staff_profile, require_user
+from app.routers.uploads import _validate_storage_path
 from app.schemas import (
     CreateReportRequest,
     CreateReportResponse,
@@ -75,6 +76,24 @@ def _row_to_public(r: dict) -> IssuePublic:
     )
 
 
+def _row_to_map_point(r: dict) -> IssueMapPoint:
+    return IssueMapPoint(
+        id=r["id"],
+        status=r["status"],
+        category=r.get("category") or r.get("ai_category"),
+        subcategory=r.get("subcategory"),
+        severity=r.get("severity") or r.get("ai_severity"),
+        organization_id=r.get("organization_id") or r.get("routed_organization_id"),
+        title=r.get("title"),
+        created_at=r["created_at"],
+        updated_at=r["updated_at"],
+        is_likely_duplicate=bool(r.get("is_likely_duplicate") or False),
+        duplicate_of_id=r.get("duplicate_of_id"),
+        latitude=float(r["latitude"] if "latitude" in r else r["lat"]),
+        longitude=float(r["longitude"] if "longitude" in r else r["lng"]),
+    )
+
+
 def _row_to_media(r: dict) -> IssueMedia:
     return IssueMedia(**r)
 
@@ -83,7 +102,11 @@ def _row_to_timeline(r: dict) -> IssueTimelineEntry:
     return IssueTimelineEntry(**r)
 
 
-def _row_to_duplicate(r: dict) -> IssueDuplicateSuggestion:
+def _row_to_duplicate(
+    r: dict,
+    *,
+    include_candidate: bool = True,
+) -> IssueDuplicateSuggestion:
     candidate_issue = r.get("candidate_issue")
     return IssueDuplicateSuggestion(
         id=r["id"],
@@ -93,7 +116,11 @@ def _row_to_duplicate(r: dict) -> IssueDuplicateSuggestion:
         source=r.get("source"),
         dismissed=bool(r.get("dismissed") or False),
         created_at=r["created_at"],
-        candidate_issue=_row_to_public(candidate_issue) if candidate_issue else None,
+        candidate_issue=(
+            _row_to_public(candidate_issue)
+            if include_candidate and candidate_issue
+            else None
+        ),
     )
 
 
@@ -103,6 +130,7 @@ def _row_to_detail(
     media: list[dict] | None = None,
     timeline: list[dict] | None = None,
     duplicate_suggestions: list[dict] | None = None,
+    include_duplicate_candidates: bool = True,
 ) -> IssueDetail:
     base = _row_to_public(row).model_dump()
     base.update(
@@ -112,11 +140,62 @@ def _row_to_detail(
             "media": [_row_to_media(item) for item in media or []],
             "timeline": [_row_to_timeline(item) for item in timeline or []],
             "duplicate_suggestions": [
-                _row_to_duplicate(item) for item in duplicate_suggestions or []
+                _row_to_duplicate(
+                    item,
+                    include_candidate=include_duplicate_candidates,
+                )
+                for item in duplicate_suggestions or []
             ],
         }
     )
     return IssueDetail(**base)
+
+
+def _reader_profile(supabase: Client, user: dict) -> dict:
+    profile = get_profile(supabase, user["sub"]) or {}
+    return {
+        "sub": user["sub"],
+        "role": profile.get("role") or "citizen",
+        "organization_id": profile.get("organization_id"),
+    }
+
+
+def _can_read_issue(reader: dict, issue_row: dict) -> bool:
+    if str(issue_row.get("reporter_id")) == str(reader["sub"]):
+        return True
+    if reader["role"] == "admin":
+        return True
+    if reader["role"] == "authority":
+        routed_org = issue_row.get("routed_organization_id")
+        reader_org = reader.get("organization_id")
+        return bool(routed_org and reader_org and str(routed_org) == str(reader_org))
+    return False
+
+
+def _require_issue_read_access(
+    supabase: Client,
+    user: dict,
+    issue_row: dict,
+) -> dict:
+    reader = _reader_profile(supabase, user)
+    if not _can_read_issue(reader, issue_row):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this issue",
+        )
+    return reader
+
+
+def _validate_report_media_path(path: str | None, reporter_id: str) -> str | None:
+    if path is None:
+        return None
+    clean_path = _validate_storage_path(path)
+    if not clean_path.startswith(f"{reporter_id}/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Report media must be uploaded under your user prefix",
+        )
+    return clean_path
 
 
 def _ensure_authority_can_patch(staff: dict, issue_row: dict) -> None:
@@ -154,6 +233,9 @@ def submit_report(
     settings: Settings = Depends(get_settings),
 ) -> CreateReportResponse:
     reporter_id = user["sub"]
+    photo_path = _validate_report_media_path(body.photo_path, reporter_id)
+    audio_path = _validate_report_media_path(body.audio_path, reporter_id)
+    video_path = _validate_report_media_path(body.video_path, reporter_id)
     issue_id = issues_service.create_issue_row(
         supabase,
         reporter_id=reporter_id,
@@ -162,9 +244,9 @@ def submit_report(
         title=body.title,
         description=body.description,
         voice_transcript=body.voice_transcript,
-        photo_path=body.photo_path,
-        audio_path=body.audio_path,
-        video_path=body.video_path,
+        photo_path=photo_path,
+        audio_path=audio_path,
+        video_path=video_path,
     )
     issues_service.append_event(
         supabase,
@@ -177,7 +259,7 @@ def submit_report(
             "title": body.title,
             "description_language": body.description_language,
             "voice_language": body.voice_language,
-            "video_path": body.video_path,
+            "video_path": video_path,
         },
     )
 
@@ -193,9 +275,9 @@ def submit_report(
                 description_language=body.description_language,
                 voice_transcript=body.voice_transcript,
                 voice_language=body.voice_language,
-                photo_path=body.photo_path,
-                audio_path=body.audio_path,
-                video_path=body.video_path,
+                photo_path=photo_path,
+                audio_path=audio_path,
+                video_path=video_path,
             )
         except Exception:
             logger.exception("Inline AI failed for issue %s", issue_id)
@@ -265,10 +347,10 @@ def issues_map(
         limit=limit,
         offset=offset,
     )
-    return [IssueMapPoint(**row) for row in rows]
+    return [_row_to_map_point(row) for row in rows]
 
 
-@router.get("/issues/nearby", response_model=list[IssuePublic])
+@router.get("/issues/nearby", response_model=list[IssueMapPoint])
 def issues_nearby(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
@@ -295,17 +377,19 @@ def issues_nearby(
                 f"the `{ISSUES_NEARBY_RPC}` RPC (see app/db_contract.py)."
             ),
         ) from e
-    return [_row_to_public(r) for r in rows]
+    return [_row_to_map_point(r) for r in rows]
 
 
 @router.get("/issues/{issue_id}", response_model=IssueDetail)
 def get_issue(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> IssueDetail:
     row = issues_service.fetch_issue(supabase, issue_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    reader = _require_issue_read_access(supabase, user, row)
     media = issues_service.list_issue_media(supabase, issue_id)
     timeline = issues_service.list_issue_timeline(supabase, issue_id)
     duplicates = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
@@ -314,16 +398,20 @@ def get_issue(
         media=media,
         timeline=timeline,
         duplicate_suggestions=duplicates,
+        include_duplicate_candidates=reader["role"] in ("admin", "authority"),
     )
 
 
 @router.get("/issues/{issue_id}/media", response_model=list[IssueMedia])
 def get_issue_media(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueMedia]:
-    if not issues_service.fetch_issue(supabase, issue_id):
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _require_issue_read_access(supabase, user, row)
     rows = issues_service.list_issue_media(supabase, issue_id)
     return [_row_to_media(r) for r in rows]
 
@@ -333,10 +421,13 @@ def get_issue_timeline(
     issue_id: UUID,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueTimelineEntry]:
-    if not issues_service.fetch_issue(supabase, issue_id):
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    _require_issue_read_access(supabase, user, row)
     rows = issues_service.list_issue_timeline(supabase, issue_id, limit=limit, offset=offset)
     return [_row_to_timeline(r) for r in rows]
 
@@ -347,12 +438,21 @@ def get_issue_timeline(
 )
 def get_issue_duplicate_suggestions(
     issue_id: UUID,
+    user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueDuplicateSuggestion]:
-    if not issues_service.fetch_issue(supabase, issue_id):
+    row = issues_service.fetch_issue(supabase, issue_id)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    reader = _require_issue_read_access(supabase, user, row)
     rows = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
-    return [_row_to_duplicate(r) for r in rows]
+    return [
+        _row_to_duplicate(
+            r,
+            include_candidate=reader["role"] in ("admin", "authority"),
+        )
+        for r in rows
+    ]
 
 
 @router.patch("/issues/{issue_id}", response_model=IssueDetail)
