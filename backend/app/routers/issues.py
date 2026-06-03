@@ -47,20 +47,20 @@ def _validate_report_media_path(path: str | None, reporter_id: str) -> str | Non
     return normalized
 
 
-def _authorized_profile(supabase: Client, user: dict, issue_row: dict) -> dict | None:
+def _authorize_issue_access(supabase: Client, user: dict, issue_row: dict) -> str:
     reporter_id = issue_row.get("reporter_id")
     if reporter_id is not None and str(reporter_id) == str(user["sub"]):
-        return None
+        return "reporter"
 
     profile = get_profile(supabase, user["sub"])
     role = (profile or {}).get("role") or "citizen"
     if role == "admin":
-        return profile
+        return "admin"
     if role == "authority":
         issue_org = issue_row.get("routed_organization_id")
         user_org = (profile or {}).get("organization_id")
         if issue_org is not None and user_org is not None and str(issue_org) == str(user_org):
-            return profile
+            return "authority"
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -68,12 +68,12 @@ def _authorized_profile(supabase: Client, user: dict, issue_row: dict) -> dict |
     )
 
 
-def _fetch_authorized_issue(supabase: Client, issue_id: UUID, user: dict) -> dict:
+def _fetch_authorized_issue(supabase: Client, issue_id: UUID, user: dict) -> tuple[dict, str]:
     row = issues_service.fetch_issue(supabase, issue_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
-    _authorized_profile(supabase, user, row)
-    return row
+    viewer_role = _authorize_issue_access(supabase, user, row)
+    return row, viewer_role
 
 
 def _report_message(settings: Settings) -> str:
@@ -350,10 +350,14 @@ def get_issue(
     user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> IssueDetail:
-    row = _fetch_authorized_issue(supabase, issue_id, user)
+    row, viewer_role = _fetch_authorized_issue(supabase, issue_id, user)
     media = issues_service.list_issue_media(supabase, issue_id)
     timeline = issues_service.list_issue_timeline(supabase, issue_id)
-    duplicates = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
+    duplicates = (
+        issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
+        if viewer_role in ("admin", "authority")
+        else []
+    )
     return _row_to_detail(
         row,
         media=media,
@@ -395,7 +399,12 @@ def get_issue_duplicate_suggestions(
     user: dict = Depends(require_user),
     supabase: Client = Depends(get_supabase),
 ) -> list[IssueDuplicateSuggestion]:
-    _fetch_authorized_issue(supabase, issue_id, user)
+    _, viewer_role = _fetch_authorized_issue(supabase, issue_id, user)
+    if viewer_role not in ("admin", "authority"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Duplicate suggestions are only available to staff",
+        )
     rows = issues_service.list_issue_duplicate_suggestions(supabase, issue_id)
     return [_row_to_duplicate(r) for r in rows]
 

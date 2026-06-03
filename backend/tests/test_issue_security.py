@@ -157,3 +157,22 @@ def test_get_issue_allows_reporter(
     body = response.json()
     assert body["id"] == str(ISSUE_ID)
     assert body["voice_transcript"] == "private transcript"
+    assert body["duplicate_suggestions"] == []
+    mock_list_duplicates.assert_not_called()
+
+
+@patch("app.routers.issues.issues_service.list_issue_duplicate_suggestions")
+@patch("app.routers.issues.issues_service.fetch_issue")
+def test_duplicate_suggestions_forbid_reporter(
+    mock_fetch_issue,
+    mock_list_duplicates,
+    mock_supabase: MagicMock,
+):
+    mock_fetch_issue.return_value = _issue_row()
+    app = _app_with_user(OWNER_ID, mock_supabase)
+
+    with TestClient(app) as client:
+        response = client.get(f"/issues/{ISSUE_ID}/duplicate-suggestions")
+
+    assert response.status_code == 403
+    mock_list_duplicates.assert_not_called()
