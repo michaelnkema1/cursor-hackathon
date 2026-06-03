@@ -26,7 +26,7 @@ from app.services.issues import (
     create_issue_row,
     fetch_issue,
     list_staff_issues,
-    patch_issue_status,
+    patch_issue,
 )
 
 
@@ -84,10 +84,12 @@ def created_issue_id(supabase: Client, test_user_id: str):
         reporter_id=test_user_id,
         lat=5.6037,
         lng=-0.1870,
+        title=None,
         description="Integration test: pothole on main road",
         voice_transcript=None,
         photo_path=None,
         audio_path=None,
+        video_path=None,
     )
     yield issue_id
 
@@ -133,10 +135,12 @@ class TestIssuesCRUD:
             reporter_id=test_user_id,
             lat=5.6037,
             lng=-0.1870,
+            title=None,
             description="Test pothole",
             voice_transcript="Voice test",
             photo_path=None,
             audio_path=None,
+            video_path=None,
         )
         assert isinstance(issue_id, uuid.UUID)
         # Cleanup
@@ -159,13 +163,17 @@ class TestIssuesCRUD:
 
     def test_patch_issue_status_to_in_progress(self, supabase: Client, created_issue_id):
         """patch_issue_status should update the status in the DB."""
-        updated = patch_issue_status(supabase, created_issue_id, status="in_progress")
+        updated = patch_issue(
+            supabase, created_issue_id, changes={"status": "in_progress"}
+        )
         assert updated is not None
         assert updated["status"] == "in_progress"
 
     def test_patch_issue_status_to_resolved(self, supabase: Client, created_issue_id):
         """Status can be moved to resolved."""
-        updated = patch_issue_status(supabase, created_issue_id, status="resolved")
+        updated = patch_issue(
+            supabase, created_issue_id, changes={"status": "resolved"}
+        )
         assert updated is not None
         assert updated["status"] == "resolved"
 
